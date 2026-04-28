@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import ExtraTreesClassifier, HistGradientBoostingClassifier
+from sklearn.ensemble import ExtraTreesClassifier, HistGradientBoostingClassifier, VotingClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score, top_k_accuracy_score
@@ -238,36 +238,65 @@ def main() -> None:
 
     print(f"Dataset windows: train={len(X_train)}, val={len(X_val)}, test={len(X_test)}")
 
+    extra_trees = ExtraTreesClassifier(
+        n_estimators=800,
+        random_state=args.seed,
+        n_jobs=-1,
+        class_weight="balanced",
+        max_features="sqrt",
+        min_samples_leaf=1,
+    )
+    random_forest = RandomForestClassifier(
+        n_estimators=600,
+        random_state=args.seed,
+        n_jobs=-1,
+        class_weight="balanced_subsample",
+        max_features="sqrt",
+    )
+    hist_gradient_boosting = HistGradientBoostingClassifier(
+        learning_rate=0.05,
+        max_iter=350,
+        l2_regularization=0.03,
+        max_leaf_nodes=31,
+        random_state=args.seed,
+    )
+    svm_rbf = make_pipeline(
+        StandardScaler(),
+        SVC(kernel="rbf", C=3.0, gamma="scale", probability=True, random_state=args.seed),
+    )
+
     models: dict[str, object] = {
         "logistic_regression": make_pipeline(
             StandardScaler(),
             LogisticRegression(max_iter=3000, class_weight="balanced", random_state=args.seed),
         ),
-        "random_forest": RandomForestClassifier(
-            n_estimators=400,
-            random_state=args.seed,
+        "random_forest": random_forest,
+        "extra_trees": extra_trees,
+        "hist_gradient_boosting": hist_gradient_boosting,
+        "soft_vote_trees_hgb": VotingClassifier(
+            estimators=[
+                ("extra_trees", extra_trees),
+                ("random_forest", random_forest),
+                ("hist_gradient_boosting", hist_gradient_boosting),
+            ],
+            voting="soft",
+            weights=[3, 2, 2],
             n_jobs=-1,
-            class_weight="balanced_subsample",
-        ),
-        "extra_trees": ExtraTreesClassifier(
-            n_estimators=600,
-            random_state=args.seed,
-            n_jobs=-1,
-            class_weight="balanced",
-            max_features="sqrt",
-        ),
-        "hist_gradient_boosting": HistGradientBoostingClassifier(
-            learning_rate=0.06,
-            max_iter=250,
-            l2_regularization=0.01,
-            random_state=args.seed,
         ),
     }
 
     if args.include_svm:
-        models["svm_rbf"] = make_pipeline(
-            StandardScaler(),
-            SVC(kernel="rbf", C=3.0, gamma="scale", probability=True, random_state=args.seed),
+        models["svm_rbf"] = svm_rbf
+        models["soft_vote_full"] = VotingClassifier(
+            estimators=[
+                ("extra_trees", extra_trees),
+                ("random_forest", random_forest),
+                ("hist_gradient_boosting", hist_gradient_boosting),
+                ("svm_rbf", svm_rbf),
+            ],
+            voting="soft",
+            weights=[3, 2, 2, 1],
+            n_jobs=-1,
         )
 
     val_results: dict[str, dict[str, float]] = {}
@@ -282,7 +311,7 @@ def main() -> None:
         val_results[name] = metrics
         print(f"{name} val metrics: {metrics}")
 
-        selection_score = metrics["trial_top1_accuracy"]
+        selection_score = metrics["trial_top1_accuracy"] + 0.05 * metrics["trial_top5_accuracy"]
         if selection_score > best_top1:
             best_top1 = selection_score
             best_name = name

@@ -41,8 +41,8 @@ src/
 1. Inspect dataset structure and schema.
 2. Visualize one sample to detect drift/noise/warm-up.
 3. Preprocess (missing values, warm-up trimming, resampling, normalization).
-4. Extract fixed statistical features from time-series windows.
-5. Train baseline models with leakage-aware grouped splits.
+4. Extract statistical, derivative, frequency, and cross-sensor features from time-series windows.
+5. Train baseline and soft-voting ensemble models with leakage-aware grouped splits.
 6. Evaluate with top-1, top-5, macro F1, weighted F1, confusion matrix.
 7. Save full inference pipeline artifact.
 8. Optionally train a time-series PyTorch model.
@@ -53,7 +53,7 @@ src/
 - Warm-up trimming: drop first 5 percent of rows.
 - Resampling: interpolate each trial to 300 time points.
 - Normalization: per-sensor z-score.
-- Leakage guard: GroupShuffleSplit by source file path.
+- Leakage guard: SmellNet `training`/`testing` folder split when present, with grouped validation by source file path.
 
 ## Models Implemented
 - Baselines (scikit-learn):
@@ -62,6 +62,7 @@ src/
 	- ExtraTreesClassifier
 	- HistGradientBoostingClassifier
 	- Optional SVM (flag)
+	- Soft-voting ensembles over tree, boosting, and SVM candidates
 - Improved sequence model (PyTorch):
 	- Tiny 1D CNN baseline in src/models/train_timeseries.py
 
@@ -129,8 +130,8 @@ uv run streamlit run src/app/streamlit_app.py
 
 | Model | Split Strategy | Top-1 | Top-5 | Macro F1 | Weighted F1 | Notes |
 |---|---|---:|---:|---:|---:|---|
-| Extra Trees windowed baseline | SmellNet folder split, window-level | 0.398 | 0.700 | 0.364 | 0.364 | 100-point windows, 25-point stride |
-| Extra Trees windowed baseline | SmellNet folder split, trial-level | 0.460 | 0.740 | 0.408 | 0.408 | Window probabilities averaged per source CSV |
+| Soft-vote full windowed baseline | SmellNet folder split, window-level | 0.531 | 0.838 | 0.478 | 0.478 | 100-point windows, 25-point stride |
+| Soft-vote full windowed baseline | SmellNet folder split, trial-level | 0.600 | 0.880 | 0.509 | 0.509 | Window probabilities averaged per source CSV |
 | TinySensorCNN | Group split | 0.100 | 0.300 | N/A | N/A | Experimental only; classical baseline is preferred |
 
 The saved default app model is `models/baseline_windowed/model.joblib`.

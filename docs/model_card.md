@@ -9,11 +9,11 @@ It is not intended for food safety, allergen detection, medical decisions, hazar
 ## Model
 
 - Artifact: `models/baseline_windowed/model.joblib`
-- Selected estimator: `ExtraTreesClassifier`
+- Selected estimator: `soft_vote_full`
 - Input sensors: `NO2`, `C2H5OH`, `VOC`, `CO`, `Alcohol`, `LPG`
 - Preprocessing: forward/backward fill, 5% warm-up trim, interpolation to 300 points, per-trial z-score normalization
 - Windowing: 100 time points with stride 25
-- Features: statistical and shape features per sensor, including mean, spread, slope, area under curve, delta, half-window change, peak timing, and energy
+- Features: statistical, shape, derivative, low/high frequency, and cross-sensor interaction features
 
 ## Evaluation
 
@@ -21,8 +21,8 @@ The model was trained on the SmellNet `base_data/training` folder and evaluated 
 
 | Level | Top-1 | Top-5 | Macro F1 | Weighted F1 |
 |---|---:|---:|---:|---:|
-| Window | 0.398 | 0.700 | 0.364 | 0.364 |
-| Trial CSV | 0.460 | 0.740 | 0.408 | 0.408 |
+| Window | 0.531 | 0.838 | 0.478 | 0.478 |
+| Trial CSV | 0.600 | 0.880 | 0.509 | 0.509 |
 
 Trial-level metrics average window probabilities for each original CSV before scoring. This better matches the Streamlit app, where users submit one CSV at a time.
 

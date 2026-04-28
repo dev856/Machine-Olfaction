@@ -3,7 +3,8 @@ name = "machine-olfaction"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
-    "huggingface-hub[cli]>=1.12.0",
+    "huggingface-hub>=1.12.0",
+    "joblib>=1.5.2",
     "matplotlib>=3.10.9",
     "numpy>=2.4.4",
     "pandas>=3.0.2",

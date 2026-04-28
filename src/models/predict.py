@@ -43,7 +43,14 @@ def build_feature_matrix(uploaded_df: pd.DataFrame, bundle: dict[str, Any]) -> t
         raise ValueError("Preprocessing produced no usable time-series windows.")
 
     features = [extract_window_feature_vector(window, trained_sensor_cols) for window in windows]
-    return np.vstack(features), proc_df, time_col, detected_sensor_cols
+    feature_matrix = np.vstack(features)
+    expected_feature_names = bundle.get("feature_names")
+    if expected_feature_names is not None and feature_matrix.shape[1] != len(expected_feature_names):
+        raise ValueError(
+            "Model artifact feature count does not match the current feature extractor. "
+            "Retrain the model before running prediction."
+        )
+    return feature_matrix, proc_df, time_col, detected_sensor_cols
 
 
 def predict_dataframe(uploaded_df: pd.DataFrame, bundle: dict[str, Any]) -> dict[str, Any]:
