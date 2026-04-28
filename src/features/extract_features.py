@@ -35,6 +35,13 @@ FEATURE_SUFFIXES: tuple[str, ...] = (
     "fft_balance",
 )
 
+WINDOW_CONTEXT_FEATURES: tuple[str, ...] = (
+    "window_start_ratio",
+    "window_center_ratio",
+    "window_stop_ratio",
+    "window_width_ratio",
+)
+
 
 def _safe_moment_features(x: np.ndarray) -> tuple[float, float]:
     if len(x) < 2:
@@ -158,6 +165,15 @@ def feature_names_for_sensors(sensor_names: Sequence[str]) -> list[str]:
     return names
 
 
+def contextual_feature_names_for_sensors(sensor_names: Sequence[str]) -> list[str]:
+    base_names = feature_names_for_sensors(sensor_names)
+    return (
+        [f"window__{name}" for name in base_names]
+        + [f"trial__{name}" for name in base_names]
+        + list(WINDOW_CONTEXT_FEATURES)
+    )
+
+
 def _cross_sensor_features(window: np.ndarray, sensor_names: Sequence[str]) -> dict[str, float]:
     out: dict[str, float] = {}
     for left_idx, left in enumerate(sensor_names):
@@ -196,3 +212,29 @@ def extract_window_feature_vector(window: np.ndarray, sensor_names: Sequence[str
     feat_dict = extract_window_feature_dict(window, sensor_names)
     ordered_names = feature_names_for_sensors(sensor_names)
     return np.array([feat_dict[name] for name in ordered_names], dtype=float)
+
+
+def window_position_features(start: int, window_length: int, trial_length: int) -> np.ndarray:
+    if trial_length <= 1:
+        return np.array([0.0, 0.5, 1.0, 1.0], dtype=float)
+
+    stop = min(start + window_length, trial_length)
+    denom = float(max(1, trial_length - 1))
+    start_ratio = float(start / denom)
+    stop_ratio = float((stop - 1) / denom)
+    center_ratio = float((start_ratio + stop_ratio) / 2.0)
+    width_ratio = float(window_length / max(1, trial_length))
+    return np.array([start_ratio, center_ratio, stop_ratio, width_ratio], dtype=float)
+
+
+def extract_contextual_window_feature_vector(
+    window: np.ndarray,
+    full_trial: np.ndarray,
+    sensor_names: Sequence[str],
+    start: int,
+    trial_length: int,
+) -> np.ndarray:
+    window_features = extract_window_feature_vector(window, sensor_names)
+    trial_features = extract_window_feature_vector(full_trial, sensor_names)
+    position_features = window_position_features(start, len(window), trial_length)
+    return np.concatenate([window_features, trial_features, position_features])

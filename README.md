@@ -17,6 +17,17 @@ This repository builds a reproducible end-to-end machine learning pipeline for s
 - Input: one trial CSV of sensor readings over time.
 - Output: predicted smell class plus class probabilities.
 
+## What This Project Does For a User
+The project is a research demo for machine olfaction: it takes a CSV recorded from a gas sensor array and estimates which smell class from SmellNet the signal most resembles. A user does not need to inspect model code to use it:
+
+1. Open the Streamlit app.
+2. Select one of the demo SmellNet CSV files or upload a compatible sensor CSV.
+3. Choose a saved model artifact from the sidebar.
+4. Open the **Prediction Results** tab.
+5. Read the predicted smell class, confidence score, top-5 alternatives, and sensor plots.
+
+The app also explains whether the CSV schema matches the trained model and labels low-confidence outputs. It is intended for dataset exploration and ML research, not production safety decisions.
+
 ## Project Structure
 ```
 data/
@@ -120,18 +131,59 @@ uv run streamlit run src/app/streamlit_app.py
 ```
 
 ## Streamlit Demo Behavior
+Use the sidebar **Navigation** menu to switch between:
+
+- **Project Guide**: explains the project use case, why it is useful, how to navigate the app, and key limitations.
+- **Prediction Demo**: loads saved models, accepts demo/uploaded CSVs, and shows model predictions.
+
 1. Upload a sensor CSV or choose a real sample CSV copied from SmellNet.
 2. Validate the uploaded schema against the saved model's expected sensor columns.
 3. Preview raw sensor curves.
 4. Run the saved baseline model with the same preprocessing and window aggregation used during evaluation.
 5. Show predicted smell class, confidence label, analyzed window count, top-5 probabilities, and preprocessed curves.
 
+## Model Selection in the App
+The Streamlit sidebar automatically discovers saved pipelines at `models/*/model.joblib`. Each option shows the artifact folder, the best classifier inside that artifact, and the trial-level top-1 metric when available.
+
+Current saved choices include:
+
+- `models/baseline/model.joblib`: older full-sequence baseline.
+- `models/baseline_v2/model.joblib`: older windowed random-forest baseline.
+- `models/baseline_windowed/model.joblib`: current strongest artifact, a windowed soft-voting ensemble.
+
+Use the **Models** tab to compare saved metrics and see the candidate models trained inside the selected artifact.
+
+## Accuracy Improvement Path
+The current accuracy improvement comes from the windowed feature baseline:
+
+- creates multiple windows from each sensor trial
+- extracts statistical, derivative, frequency, timing, and cross-sensor features
+- can add whole-trial context and window-position features with `--use-context-features`
+- can use max window aggregation with `--trial-aggregation max`; on the current best saved artifact this keeps trial top-1 at 60.0% and improves trial top-5 from 88.0% to 90.0%
+- compares logistic regression, random forest, extra trees, histogram gradient boosting, SVM, and soft-voting ensembles
+- selects the best validation model and reports held-out test metrics
+
+Recommended training command:
+
+```powershell
+uv run python src/models/train_baseline.py --data-root data/raw/SmellNet --output-dir models/baseline_context --window-size 100 --window-stride 25 --include-svm --use-context-features --trial-aggregation max
+```
+
+After retraining, rerun evaluation and restart Streamlit:
+
+```powershell
+uv run python src/models/evaluate.py --model-path models/baseline_windowed/model.joblib --eval-data models/baseline_windowed/eval_data.npz --output-dir models/baseline_windowed
+uv run streamlit run src/app/streamlit_app.py
+```
+
 ## Current Results
 
 | Model | Split Strategy | Top-1 | Top-5 | Macro F1 | Weighted F1 | Notes |
 |---|---|---:|---:|---:|---:|---|
+| Contextual window random forest | SmellNet folder split, window-level | 0.596 | 0.827 | 0.506 | 0.506 | Adds whole-trial features and window position |
+| Contextual window random forest | SmellNet folder split, trial-level | 0.580 | 0.820 | 0.486 | 0.486 | Mean aggregation; max aggregation reached 0.600 trial top-1 in post-run analysis |
 | Soft-vote full windowed baseline | SmellNet folder split, window-level | 0.531 | 0.838 | 0.478 | 0.478 | 100-point windows, 25-point stride |
-| Soft-vote full windowed baseline | SmellNet folder split, trial-level | 0.600 | 0.880 | 0.509 | 0.509 | Window probabilities averaged per source CSV |
+| Soft-vote full windowed baseline | SmellNet folder split, trial-level | 0.600 | 0.880 | 0.509 | 0.509 | Mean aggregation; max aggregation improves top-5 to 0.900 |
 | TinySensorCNN | Group split | 0.100 | 0.300 | N/A | N/A | Experimental only; classical baseline is preferred |
 
 The saved default app model is `models/baseline_windowed/model.joblib`.

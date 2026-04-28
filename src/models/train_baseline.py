@@ -23,7 +23,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.data.preprocess import PreprocessConfig, preprocess_trial, window_array
-from src.features.extract_features import extract_window_feature_vector, feature_names_for_sensors
+from src.features.extract_features import (
+    contextual_feature_names_for_sensors,
+    extract_contextual_window_feature_vector,
+    extract_window_feature_vector,
+    feature_names_for_sensors,
+)
 from src.models.pipeline_io import save_pipeline
 
 
@@ -40,6 +45,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--val-size", type=float, default=0.2, help="Validation fraction from total dataset")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--include-svm", action="store_true", help="Also train SVM baseline")
+    parser.add_argument(
+        "--trial-aggregation",
+        choices=["mean", "max", "median"],
+        default="mean",
+        help="Window probability aggregation used by the saved inference bundle",
+    )
+    parser.add_argument(
+        "--use-context-features",
+        action="store_true",
+        help="Concatenate each window's features with whole-trial features and window position metadata",
+    )
     parser.add_argument("--max-files", type=int, default=0, help="Optional cap for fast debugging")
     parser.add_argument(
         "--use-folder-split",
@@ -137,7 +153,20 @@ def label_aware_group_holdout(labels: np.ndarray, groups: np.ndarray, holdout_si
 
 
 
-def build_feature_dataset(csv_files: list[Path], cfg: PreprocessConfig, window_size: int, window_stride: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[str], list[str]]:
+def windows_with_starts(values: np.ndarray, window_size: int, stride: int) -> tuple[list[np.ndarray], list[int]]:
+    windows = window_array(values, window_size=window_size, stride=stride)
+    if window_size <= 0 or window_size >= len(values):
+        return windows, [0] * len(windows)
+    return windows, list(range(0, len(values) - window_size + 1, stride))
+
+
+def build_feature_dataset(
+    csv_files: list[Path],
+    cfg: PreprocessConfig,
+    window_size: int,
+    window_stride: int,
+    use_context_features: bool,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[str], list[str]]:
     features: list[np.ndarray] = []
     labels: list[str] = []
     groups: list[str] = []
@@ -155,13 +184,22 @@ def build_feature_dataset(csv_files: list[Path], cfg: PreprocessConfig, window_s
                 sensor_columns_ref = sensor_cols
 
             values = proc_df[sensor_columns_ref].to_numpy(dtype=float)
-            windows = window_array(values, window_size=window_size, stride=window_stride)
+            windows, starts = windows_with_starts(values, window_size=window_size, stride=window_stride)
 
             label = label_from_filename(csv_path)
             group_id = str(csv_path)
 
-            for window_idx, window in enumerate(windows):
-                vec = extract_window_feature_vector(window, sensor_columns_ref)
+            for window_idx, (window, start) in enumerate(zip(windows, starts)):
+                if use_context_features:
+                    vec = extract_contextual_window_feature_vector(
+                        window,
+                        values,
+                        sensor_columns_ref,
+                        start=start,
+                        trial_length=len(values),
+                    )
+                else:
+                    vec = extract_window_feature_vector(window, sensor_columns_ref)
                 features.append(vec)
                 labels.append(label)
                 groups.append(group_id)
@@ -209,6 +247,7 @@ def main() -> None:
         cfg,
         window_size=args.window_size,
         window_stride=args.window_stride,
+        use_context_features=args.use_context_features,
     )
 
     label_encoder = LabelEncoder()
@@ -338,7 +377,12 @@ def main() -> None:
 
     cm = confusion_matrix(y_test, y_pred_test, labels=np.arange(n_classes))
 
-    feature_names = feature_names_for_sensors(sensor_columns)
+    feature_mode = "contextual_window" if args.use_context_features else "window"
+    feature_names = (
+        contextual_feature_names_for_sensors(sensor_columns)
+        if args.use_context_features
+        else feature_names_for_sensors(sensor_columns)
+    )
     split_manifest = pd.DataFrame(
         {
             "sample_id": sample_ids,
@@ -359,9 +403,11 @@ def main() -> None:
         "label_encoder": label_encoder,
         "sensor_columns": sensor_columns,
         "feature_names": feature_names,
+        "feature_mode": feature_mode,
         "preprocess_config": asdict(cfg),
         "window_size": args.window_size,
         "window_stride": args.window_stride,
+        "trial_aggregation": args.trial_aggregation,
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "source_split_used": "folder" if has_folder_split else "random_group",
     }
@@ -395,6 +441,7 @@ def main() -> None:
             "test": int(pd.Series(groups[test_idx]).nunique()),
         },
         "split_strategy": "folder" if has_folder_split else "random_group",
+        "feature_mode": feature_mode,
     }
 
     with (output_dir / "metrics.json").open("w", encoding="utf-8") as f:

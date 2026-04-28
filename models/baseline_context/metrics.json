@@ -1,0 +1,464 @@
+{
+  "val_results": {
+    "logistic_regression": {
+      "top1_accuracy": 0.2911111111111111,
+      "top5_accuracy": 0.7822222222222223,
+      "macro_f1": 0.22813502806716535,
+      "weighted_f1": 0.22813502806716543,
+      "trial_top1_accuracy": 0.3,
+      "trial_top5_accuracy": 0.8,
+      "trial_macro_f1": 0.22666666666666666,
+      "trial_weighted_f1": 0.22666666666666666
+    },
+    "random_forest": {
+      "top1_accuracy": 0.48,
+      "top5_accuracy": 0.7533333333333333,
+      "macro_f1": 0.4066666666666666,
+      "weighted_f1": 0.4066666666666667,
+      "trial_top1_accuracy": 0.48,
+      "trial_top5_accuracy": 0.76,
+      "trial_macro_f1": 0.4066666666666666,
+      "trial_weighted_f1": 0.4066666666666666
+    },
+    "extra_trees": {
+      "top1_accuracy": 0.4066666666666667,
+      "top5_accuracy": 0.7422222222222222,
+      "macro_f1": 0.3275757575757575,
+      "weighted_f1": 0.3275757575757576,
+      "trial_top1_accuracy": 0.4,
+      "trial_top5_accuracy": 0.74,
+      "trial_macro_f1": 0.31666666666666665,
+      "trial_weighted_f1": 0.31666666666666665
+    },
+    "hist_gradient_boosting": {
+      "top1_accuracy": 0.38,
+      "top5_accuracy": 0.62,
+      "macro_f1": 0.295,
+      "weighted_f1": 0.295,
+      "trial_top1_accuracy": 0.38,
+      "trial_top5_accuracy": 0.62,
+      "trial_macro_f1": 0.29333333333333333,
+      "trial_weighted_f1": 0.29333333333333333
+    },
+    "soft_vote_trees_hgb": {
+      "top1_accuracy": 0.42,
+      "top5_accuracy": 0.74,
+      "macro_f1": 0.34133333333333327,
+      "weighted_f1": 0.3413333333333333,
+      "trial_top1_accuracy": 0.42,
+      "trial_top5_accuracy": 0.74,
+      "trial_macro_f1": 0.34333333333333327,
+      "trial_weighted_f1": 0.34333333333333327
+    },
+    "svm_rbf": {
+      "top1_accuracy": 0.3377777777777778,
+      "top5_accuracy": 0.7155555555555555,
+      "macro_f1": 0.27584238859852517,
+      "weighted_f1": 0.27584238859852517,
+      "trial_top1_accuracy": 0.36,
+      "trial_top5_accuracy": 0.72,
+      "trial_macro_f1": 0.26799999999999996,
+      "trial_weighted_f1": 0.26799999999999996
+    },
+    "soft_vote_full": {
+      "top1_accuracy": 0.42,
+      "top5_accuracy": 0.7533333333333333,
+      "macro_f1": 0.34133333333333327,
+      "weighted_f1": 0.3413333333333333,
+      "trial_top1_accuracy": 0.42,
+      "trial_top5_accuracy": 0.74,
+      "trial_macro_f1": 0.34333333333333327,
+      "trial_weighted_f1": 0.34333333333333327
+    }
+  },
+  "best_model": "random_forest",
+  "test_metrics": {
+    "top1_accuracy": 0.5955555555555555,
+    "top5_accuracy": 0.8266666666666667,
+    "macro_f1": 0.5063550554576837,
+    "weighted_f1": 0.5063550554576838,
+    "trial_top1_accuracy": 0.58,
+    "trial_top5_accuracy": 0.82,
+    "trial_macro_f1": 0.48599999999999993,
+    "trial_weighted_f1": 0.48599999999999993
+  },
+  "class_report": {
+    "allspice": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 9.0
+    },
+    "almond": {
+      "precision": 0.25,
+      "recall": 1.0,
+      "f1-score": 0.4,
+      "support": 9.0
+    },
+    "angelica": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 9.0
+    },
+    "apple": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 9.0
+    },
+    "asparagus": {
+      "precision": 0.23684210526315788,
+      "recall": 1.0,
+      "f1-score": 0.3829787234042553,
+      "support": 9.0
+    },
+    "avocado": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 9.0
+    },
+    "banana": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 9.0
+    },
+    "brazil_nut": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 9.0
+    },
+    "broccoli": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 9.0
+    },
+    "brussel_sprouts": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 9.0
+    },
+    "cabbage": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 9.0
+    },
+    "cashew": {
+      "precision": 1.0,
+      "recall": 0.8888888888888888,
+      "f1-score": 0.9411764705882353,
+      "support": 9.0
+    },
+    "cauliflower": {
+      "precision": 1.0,
+      "recall": 0.4444444444444444,
+      "f1-score": 0.6153846153846154,
+      "support": 9.0
+    },
+    "chamomile": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 9.0
+    },
+    "chervil": {
+      "precision": 0.3076923076923077,
+      "recall": 0.4444444444444444,
+      "f1-score": 0.36363636363636365,
+      "support": 9.0
+    },
+    "chestnuts": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 9.0
+    },
+    "chives": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 9.0
+    },
+    "cinnamon": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 9.0
+    },
+    "cloves": {
+      "precision": 0.5,
+      "recall": 1.0,
+      "f1-score": 0.6666666666666666,
+      "support": 9.0
+    },
+    "coriander": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 9.0
+    },
+    "cumin": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 9.0
+    },
+    "dill": {
+      "precision": 0.5,
+      "recall": 1.0,
+      "f1-score": 0.6666666666666666,
+      "support": 9.0
+    },
+    "garlic": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 9.0
+    },
+    "ginger": {
+      "precision": 0.5,
+      "recall": 1.0,
+      "f1-score": 0.6666666666666666,
+      "support": 9.0
+    },
+    "hazelnut": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 9.0
+    },
+    "kiwi": {
+      "precision": 0.5294117647058824,
+      "recall": 1.0,
+      "f1-score": 0.6923076923076923,
+      "support": 9.0
+    },
+    "lemon": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 9.0
+    },
+    "mandarin_orange": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 9.0
+    },
+    "mango": {
+      "precision": 0.5,
+      "recall": 1.0,
+      "f1-score": 0.6666666666666666,
+      "support": 9.0
+    },
+    "mint": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 9.0
+    },
+    "mugwort": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 9.0
+    },
+    "mustard": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 9.0
+    },
+    "nutmeg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 9.0
+    },
+    "oregano": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 9.0
+    },
+    "peach": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 9.0
+    },
+    "peanuts": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 9.0
+    },
+    "pear": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 9.0
+    },
+    "pecans": {
+      "precision": 0.36,
+      "recall": 1.0,
+      "f1-score": 0.5294117647058824,
+      "support": 9.0
+    },
+    "pili_nut": {
+      "precision": 0.6,
+      "recall": 1.0,
+      "f1-score": 0.75,
+      "support": 9.0
+    },
+    "pineapple": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 9.0
+    },
+    "pistachios": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 9.0
+    },
+    "potato": {
+      "precision": 0.47368421052631576,
+      "recall": 1.0,
+      "f1-score": 0.6428571428571429,
+      "support": 9.0
+    },
+    "radish": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 9.0
+    },
+    "saffron": {
+      "precision": 0.5,
+      "recall": 1.0,
+      "f1-score": 0.6666666666666666,
+      "support": 9.0
+    },
+    "star_anise": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 9.0
+    },
+    "strawberry": {
+      "precision": 0.5,
+      "recall": 1.0,
+      "f1-score": 0.6666666666666666,
+      "support": 9.0
+    },
+    "sweet_potato": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 9.0
+    },
+    "tomato": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 9.0
+    },
+    "turnip": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 9.0
+    },
+    "walnuts": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 9.0
+    },
+    "accuracy": 0.5955555555555555,
+    "macro avg": {
+      "precision": 0.4751526077637533,
+      "recall": 0.5955555555555556,
+      "f1-score": 0.5063550554576837,
+      "support": 450.0
+    },
+    "weighted avg": {
+      "precision": 0.47515260776375323,
+      "recall": 0.5955555555555555,
+      "f1-score": 0.5063550554576838,
+      "support": 450.0
+    }
+  },
+  "class_names": [
+    "allspice",
+    "almond",
+    "angelica",
+    "apple",
+    "asparagus",
+    "avocado",
+    "banana",
+    "brazil_nut",
+    "broccoli",
+    "brussel_sprouts",
+    "cabbage",
+    "cashew",
+    "cauliflower",
+    "chamomile",
+    "chervil",
+    "chestnuts",
+    "chives",
+    "cinnamon",
+    "cloves",
+    "coriander",
+    "cumin",
+    "dill",
+    "garlic",
+    "ginger",
+    "hazelnut",
+    "kiwi",
+    "lemon",
+    "mandarin_orange",
+    "mango",
+    "mint",
+    "mugwort",
+    "mustard",
+    "nutmeg",
+    "oregano",
+    "peach",
+    "peanuts",
+    "pear",
+    "pecans",
+    "pili_nut",
+    "pineapple",
+    "pistachios",
+    "potato",
+    "radish",
+    "saffron",
+    "star_anise",
+    "strawberry",
+    "sweet_potato",
+    "tomato",
+    "turnip",
+    "walnuts"
+  ],
+  "n_samples": {
+    "train": 1800,
+    "val": 450,
+    "test": 450
+  },
+  "n_trials": {
+    "train": 200,
+    "val": 50,
+    "test": 50
+  },
+  "split_strategy": "folder",
+  "feature_mode": "contextual_window"
+}

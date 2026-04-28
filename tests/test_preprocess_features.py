@@ -4,7 +4,12 @@ import numpy as np
 import pandas as pd
 
 from src.data.preprocess import PreprocessConfig, identify_time_column, infer_sensor_columns, preprocess_trial, window_array
-from src.features.extract_features import extract_window_feature_vector, feature_names_for_sensors
+from src.features.extract_features import (
+    contextual_feature_names_for_sensors,
+    extract_contextual_window_feature_vector,
+    extract_window_feature_vector,
+    feature_names_for_sensors,
+)
 
 
 def test_preprocess_detects_time_and_sensors() -> None:
@@ -50,4 +55,26 @@ def test_feature_vector_matches_feature_names() -> None:
     assert len(vector) == len(names)
     assert "NO2__time_to_max" in names
     assert "VOC__energy" in names
+    assert np.isfinite(vector).all()
+
+
+def test_contextual_feature_vector_matches_feature_names() -> None:
+    full_trial = np.array(
+        [
+            [0.0, 1.0],
+            [1.0, 3.0],
+            [2.0, 5.0],
+            [3.0, 7.0],
+            [4.0, 8.0],
+        ]
+    )
+    window = full_trial[1:4]
+    sensors = ["NO2", "VOC"]
+
+    vector = extract_contextual_window_feature_vector(window, full_trial, sensors, start=1, trial_length=len(full_trial))
+    names = contextual_feature_names_for_sensors(sensors)
+
+    assert len(vector) == len(names)
+    assert "trial__NO2__mean" in names
+    assert "window_center_ratio" in names
     assert np.isfinite(vector).all()
