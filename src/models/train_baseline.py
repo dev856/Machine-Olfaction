@@ -1,3 +1,14 @@
+"""Train the classical machine-olfaction baseline.
+
+Training flow:
+1. Discover SmellNet `base_data` CSV files.
+2. Treat each file as one smell trial and infer the label from the filename.
+3. Preprocess each trial with the same rules used at inference.
+4. Convert full trials or sliding windows into fixed feature vectors.
+5. Compare several classical classifiers on validation data.
+6. Refit the best model and save the full inference bundle.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -117,7 +128,29 @@ def compute_metrics(y_true: np.ndarray, proba: np.ndarray, n_classes: int) -> di
     }
 
 
-def compute_trial_metrics(y_true: np.ndarray, proba: np.ndarray, groups: np.ndarray, n_classes: int) -> dict[str, float]:
+def aggregate_probabilities(proba: np.ndarray, method: str) -> np.ndarray:
+    """Aggregate window probabilities for one trial."""
+
+    if method == "mean":
+        out = np.mean(proba, axis=0)
+    elif method == "max":
+        out = np.max(proba, axis=0)
+    elif method == "median":
+        out = np.median(proba, axis=0)
+    else:
+        raise ValueError(f"Unknown trial aggregation method: {method}")
+
+    total = float(np.sum(out))
+    return out / total if total > 0 else out
+
+
+def compute_trial_metrics(
+    y_true: np.ndarray,
+    proba: np.ndarray,
+    groups: np.ndarray,
+    n_classes: int,
+    aggregation: str = "mean",
+) -> dict[str, float]:
     trial_true: list[int] = []
     trial_proba: list[np.ndarray] = []
 
@@ -127,7 +160,7 @@ def compute_trial_metrics(y_true: np.ndarray, proba: np.ndarray, groups: np.ndar
         if len(np.unique(group_labels)) != 1:
             raise ValueError(f"Cannot aggregate trial with multiple labels: {group}")
         trial_true.append(int(group_labels[0]))
-        trial_proba.append(np.mean(proba[mask], axis=0))
+        trial_proba.append(aggregate_probabilities(proba[mask], method=aggregation))
 
     metrics = compute_metrics(np.array(trial_true), np.vstack(trial_proba), n_classes=n_classes)
     return {f"trial_{key}": value for key, value in metrics.items()}
@@ -346,7 +379,15 @@ def main() -> None:
         model.fit(X_train, y_train)
         proba_val = model.predict_proba(X_val)
         metrics = compute_metrics(y_val, proba_val, n_classes=n_classes)
-        metrics.update(compute_trial_metrics(y_val, proba_val, groups[val_idx], n_classes=n_classes))
+        metrics.update(
+            compute_trial_metrics(
+                y_val,
+                proba_val,
+                groups[val_idx],
+                n_classes=n_classes,
+                aggregation=args.trial_aggregation,
+            )
+        )
         val_results[name] = metrics
         print(f"{name} val metrics: {metrics}")
 
@@ -363,7 +404,15 @@ def main() -> None:
     proba_test = best_model.predict_proba(X_test)
 
     test_metrics = compute_metrics(y_test, proba_test, n_classes=n_classes)
-    test_metrics.update(compute_trial_metrics(y_test, proba_test, groups[test_idx], n_classes=n_classes))
+    test_metrics.update(
+        compute_trial_metrics(
+            y_test,
+            proba_test,
+            groups[test_idx],
+            n_classes=n_classes,
+            aggregation=args.trial_aggregation,
+        )
+    )
     y_pred_test = np.argmax(proba_test, axis=1)
 
     class_report = classification_report(
@@ -442,6 +491,7 @@ def main() -> None:
         },
         "split_strategy": "folder" if has_folder_split else "random_group",
         "feature_mode": feature_mode,
+        "trial_aggregation": args.trial_aggregation,
     }
 
     with (output_dir / "metrics.json").open("w", encoding="utf-8") as f:

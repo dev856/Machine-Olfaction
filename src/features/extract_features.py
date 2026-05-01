@@ -1,3 +1,11 @@
+"""Feature extraction for gas-sensor time-series windows.
+
+A classical baseline needs fixed-length vectors, while each smell recording is
+a time-series. This module converts each sensor window into interpretable
+signal features: level, spread, drift, peak timing, energy, frequency balance,
+and relationships between sensors.
+"""
+
 from __future__ import annotations
 
 from typing import Sequence
@@ -34,6 +42,14 @@ FEATURE_SUFFIXES: tuple[str, ...] = (
     "fft_high_power",
     "fft_balance",
 )
+
+FEATURE_GROUPS: dict[str, tuple[str, ...]] = {
+    "level_and_spread": ("mean", "std", "median", "q25", "q75", "iqr", "min", "max", "range"),
+    "shape_over_time": ("slope", "auc", "final", "delta", "abs_delta", "half_delta"),
+    "timing": ("time_to_max", "time_to_min"),
+    "dynamics": ("diff_mean", "diff_std", "diff_max_abs", "energy"),
+    "frequency": ("fft_low_power", "fft_high_power", "fft_balance"),
+}
 
 WINDOW_CONTEXT_FEATURES: tuple[str, ...] = (
     "window_start_ratio",
@@ -147,6 +163,8 @@ def _basic_signal_features(signal: np.ndarray) -> dict[str, float]:
 
 
 def cross_sensor_feature_names(sensor_names: Sequence[str]) -> list[str]:
+    """Names for pairwise features that describe how sensor channels interact."""
+
     names: list[str] = []
     for left_idx, left in enumerate(sensor_names):
         for right in sensor_names[left_idx + 1 :]:
@@ -193,6 +211,8 @@ def _cross_sensor_features(window: np.ndarray, sensor_names: Sequence[str]) -> d
 
 
 def extract_window_feature_dict(window: np.ndarray, sensor_names: Sequence[str]) -> dict[str, float]:
+    """Return interpretable features for one [time, sensors] window."""
+
     if window.ndim != 2:
         raise ValueError("Expected window shape [time, sensors].")
 
@@ -234,6 +254,8 @@ def extract_contextual_window_feature_vector(
     start: int,
     trial_length: int,
 ) -> np.ndarray:
+    """Combine local window features with whole-trial context and window position."""
+
     window_features = extract_window_feature_vector(window, sensor_names)
     trial_features = extract_window_feature_vector(full_trial, sensor_names)
     position_features = window_position_features(start, len(window), trial_length)

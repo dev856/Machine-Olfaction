@@ -1,3 +1,11 @@
+"""Inference helpers shared by the CLI and Streamlit app.
+
+The saved artifact contains the model, label encoder, expected sensor columns,
+preprocessing configuration, and windowing choices. This module rebuilds the
+same feature matrix for a new CSV and aggregates window probabilities into one
+trial-level smell prediction.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -26,6 +34,8 @@ def windows_with_starts(values: np.ndarray, window_size: int, stride: int) -> tu
 
 
 def build_feature_matrix(uploaded_df: pd.DataFrame, bundle: dict[str, Any]) -> tuple[np.ndarray, pd.DataFrame, str | None, list[str]]:
+    """Preprocess an uploaded trial and convert it into model-ready features."""
+
     preprocess_cfg = PreprocessConfig(**bundle["preprocess_config"])
     trained_sensor_cols: list[str] = list(bundle["sensor_columns"])
     time_col, detected_sensor_cols, missing = validate_uploaded_schema(uploaded_df, trained_sensor_cols)
@@ -75,6 +85,8 @@ def build_feature_matrix(uploaded_df: pd.DataFrame, bundle: dict[str, Any]) -> t
 
 
 def aggregate_window_probabilities(window_proba: np.ndarray, method: str = "mean") -> np.ndarray:
+    """Combine window probabilities into one probability vector for the CSV."""
+
     if method == "mean":
         proba = np.mean(window_proba, axis=0)
     elif method == "max":
@@ -91,6 +103,8 @@ def aggregate_window_probabilities(window_proba: np.ndarray, method: str = "mean
 
 
 def predict_dataframe(uploaded_df: pd.DataFrame, bundle: dict[str, Any], aggregation: str | None = None) -> dict[str, Any]:
+    """Predict the smell class for one uploaded sensor CSV."""
+
     model = bundle["model"]
     classes = bundle["label_encoder"].classes_
     features, proc_df, time_col, detected_sensor_cols = build_feature_matrix(uploaded_df, bundle)

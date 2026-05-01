@@ -1,91 +1,130 @@
 # SmellNet Data Dictionary
 
-## 1) Dataset Overview
+This document records the dataset assumptions used by the current code. It avoids hard-coding claims that must come from the dataset itself, such as class counts or units, unless they are visible in the local files or model artifact.
 
-- Dataset root path:
-- Date inspected:
-- Inspector:
-- Data subsets found (example: base_data, mixture_data, gcms_data, gcms_processed, text_data):
-- Notes:
+## Dataset Location
 
-## 2) File Inventory
+Expected local root:
 
-| Subset/Folder | File path (relative) | File meaning/purpose | Row count | Column count | One row = what? (reading/sample/trial/other) | Notes |
-|---|---|---|---:|---:|---|---|
-| TODO | TODO | TODO | TODO | TODO | TODO | TODO |
+```text
+data/raw/SmellNet
+```
 
-## 3) Per-File Schema Details
+Primary subset used by the baseline:
 
-### File: TODO
+```text
+data/raw/SmellNet/base_data
+```
 
-- Relative path:
-- Purpose of this file:
-- Shape (rows, columns):
-- Primary key candidate(s):
-- Trial/sample identifier column(s):
-- Timestamp column:
-- Label column(s):
-- Class name column(s):
-- Sensor column(s):
-- Non-sensor metadata column(s):
-- Target task suggested by this file (classification/regression/other):
-- Notes:
+The training script also detects SmellNet folder splits when the following folders are present:
 
-#### Column Dictionary
+```text
+base_data/training
+base_data/testing
+```
 
-| Column name | Data type (observed) | Role (sensor/timestamp/label/id/metadata/target) | Example value | Missing count | Missing % | Unit (if available) | Notes |
-|---|---|---|---|---:|---:|---|---|
-| TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO |
+## Baseline Learning Unit
 
-## 4) Sensor Columns Summary (Across Files)
+| Concept | Current assumption |
+|---|---|
+| One CSV file | One gas-sensor trial |
+| Rows | Ordered time steps within the trial |
+| Numeric sensor columns | Gas sensor channels |
+| Target label | Inferred from the CSV filename |
+| Prediction target | One smell class for the whole CSV |
+| Mixture files | Not modeled as mixture labels by the current baseline |
 
-| File path | Sensor columns (exact names) | Sensor count | Any naming pattern? | Unit/source info | Notes |
-|---|---|---:|---|---|---|
-| TODO | TODO | TODO | TODO | TODO | TODO |
+## Label Parsing Rule
 
-## 5) Timestamp Summary (Across Files)
+Labels are inferred from filenames in `src/models/train_baseline.py`.
 
-| File path | Timestamp column name | Raw format example | Parsed format (if tested) | Timezone info | Monotonic within trial? | Sampling interval known? | Notes |
-|---|---|---|---|---|---|---|---|
-| TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO |
+Examples:
 
-## 6) Label & Class Summary
+| Filename | Parsed label |
+|---|---|
+| `allspice_6.csv` | `allspice` |
+| `black_pepper_12.csv` | `black_pepper` |
+| `unknown.csv` | `unknown` |
 
-### 6.1 Base substances (if present)
+Rule:
 
-| Label column | Class column | Unique classes | Example class values | Encoding type (string/int) | Notes |
-|---|---|---:|---|---|---|
-| TODO | TODO | TODO | TODO | TODO | TODO |
+```text
+If the filename ends with _<number>, remove that final numeric suffix.
+Otherwise use the full filename stem.
+```
 
-### 6.2 Mixtures (if present)
+## Time Column Detection
 
-| Mixture label column(s) | Base component columns | Ratio/proportion columns | Encoding details | How mixtures differ from base labels | Notes |
-|---|---|---|---|---|---|
-| TODO | TODO | TODO | TODO | TODO | TODO |
+Time columns are detected in `src/data/preprocess.py`.
 
-## 7) Missing Values Summary
+Preferred names:
 
-| File path | Columns with missing values | Total missing cells | Missingness pattern (random/by-column/by-trial) | Action candidate (drop/impute/keep) | Notes |
-|---|---|---:|---|---|---|
-| TODO | TODO | TODO | TODO | TODO | TODO |
+```text
+time, timestamp, timestamp_ms, ts, t, second, seconds, sec, sample_idx, index
+```
 
-## 8) Units and Measurement Notes
+Fallback:
 
-| Column(s) | Unit found | Where unit was found (README/header/paper/none) | Confidence (high/medium/low) | Notes |
-|---|---|---|---|---|
-| TODO | TODO | TODO | TODO | TODO |
+```text
+Any column whose normalized name contains "time" or ends with "_ms".
+```
 
-## 9) Open Questions
+If no time column is found, row order is treated as the timeline.
 
-- TODO
-- TODO
-- TODO
+## Sensor Column Detection
 
-## 10) Decisions for Next Step (Preprocessing Planning)
+Sensor columns are inferred as numeric columns after excluding likely metadata fields.
 
-- Keep/drop columns:
-- Label definition for baseline:
-- File granularity assumption (one file = one sample/trial/many readings):
-- Timestamp handling plan:
-- Missing value handling plan:
-- TODO items before coding loader:
+Excluded metadata hints:
+
+```text
+label, class, target, id, trial, sample, filepath, file_path
+```
+
+A numeric column must also have at least three unique non-missing values by default. This prevents constants and IDs from being treated as sensors.
+
+## Sensors In The Saved Windowed Baseline
+
+The current model card lists these expected sensor columns for `models/baseline_windowed/model.joblib`:
+
+```text
+NO2, C2H5OH, VOC, CO, Alcohol, LPG
+```
+
+Uploads missing any expected trained sensor are blocked by the app instead of silently making a bad prediction.
+
+## Preprocessing Rules
+
+| Step | Default |
+|---|---|
+| Missing values | Forward fill, then backward fill |
+| Warm-up trimming | Drop first 5 percent of rows |
+| Resampling | Interpolate to 300 points |
+| Normalization | Per-trial z-score for each sensor |
+| Windowing | Full trial when `--window-size 0`; otherwise sliding windows |
+
+## Feature Groups
+
+Features are created in `src/features/extract_features.py`.
+
+| Group | Examples |
+|---|---|
+| Level and spread | mean, standard deviation, median, quartiles, min, max |
+| Shape over time | slope, area under curve, final value, delta |
+| Timing | time to max, time to min |
+| Dynamics | first differences, response energy |
+| Frequency | low power, high power, low/high balance |
+| Cross-sensor relationships | pairwise correlation, mean difference, delta difference |
+
+## Open Data Questions
+
+These should be checked against the source dataset or paper before making stronger claims:
+
+- Exact units for each gas sensor channel.
+- Whether all SmellNet subsets use the same sensor schema.
+- Whether acquisition conditions such as humidity, temperature, or collection session are available.
+- Whether mixture labels should be represented as multi-label targets, proportions, or a separate task.
+
+## Responsible Interpretation
+
+The baseline is meaningful only for CSVs with the same sensor schema and similar acquisition conditions as the training data. It is a research classifier, not a safety detector.

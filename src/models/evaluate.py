@@ -23,7 +23,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-path", default="models/baseline/model.joblib")
     parser.add_argument("--eval-data", default="models/baseline/eval_data.npz")
     parser.add_argument("--output-dir", default="models/baseline")
+    parser.add_argument(
+        "--trial-aggregation",
+        choices=["artifact", "mean", "max", "median"],
+        default="artifact",
+        help="How to aggregate window probabilities for trial-level metrics.",
+    )
     return parser.parse_args()
+
+
+def aggregate_probabilities(proba: np.ndarray, method: str) -> np.ndarray:
+    if method == "mean":
+        out = np.mean(proba, axis=0)
+    elif method == "max":
+        out = np.max(proba, axis=0)
+    elif method == "median":
+        out = np.median(proba, axis=0)
+    else:
+        raise ValueError(f"Unknown trial aggregation method: {method}")
+
+    total = float(np.sum(out))
+    return out / total if total > 0 else out
 
 
 
@@ -38,6 +58,7 @@ def main() -> None:
     bundle = load_pipeline(model_path)
     model = bundle["model"]
     class_names = bundle["label_encoder"].classes_
+    trial_aggregation = bundle.get("trial_aggregation", "mean") if args.trial_aggregation == "artifact" else args.trial_aggregation
 
     data = np.load(eval_path)
     X_test = data["X_test"]
@@ -71,7 +92,7 @@ def main() -> None:
             if len(np.unique(labels)) != 1:
                 raise ValueError(f"Cannot aggregate trial with multiple labels: {group}")
             trial_true.append(int(labels[0]))
-            trial_proba.append(np.mean(proba[mask], axis=0))
+            trial_proba.append(aggregate_probabilities(proba[mask], method=trial_aggregation))
 
         trial_y = np.array(trial_true)
         trial_p = np.vstack(trial_proba)
@@ -106,7 +127,16 @@ def main() -> None:
     cm = confusion_matrix(y_test, y_pred, labels=np.arange(len(class_names)))
 
     with (output_dir / "evaluation_metrics.json").open("w", encoding="utf-8") as f:
-        json.dump({"metrics": metrics, "class_report": report, "trial_class_report": trial_report}, f, indent=2)
+        json.dump(
+            {
+                "metrics": metrics,
+                "class_report": report,
+                "trial_class_report": trial_report,
+                "trial_aggregation": trial_aggregation,
+            },
+            f,
+            indent=2,
+        )
 
     per_class = pd.DataFrame(report).T
     per_class.to_csv(output_dir / "per_class_report.csv", index=True)
@@ -121,6 +151,7 @@ def main() -> None:
     plt.savefig(output_dir / "confusion_matrix.png", dpi=180)
 
     print("Evaluation metrics:", metrics)
+    print("Trial aggregation:", trial_aggregation)
     print("Saved:")
     print(f"- {output_dir / 'evaluation_metrics.json'}")
     print(f"- {output_dir / 'per_class_report.csv'}")

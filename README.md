@@ -28,6 +28,21 @@ The project is a research demo for machine olfaction: it takes a CSV recorded fr
 
 The app also explains whether the CSV schema matches the trained model and labels low-confidence outputs. It is intended for dataset exploration and ML research, not production safety decisions.
 
+## Why This Is More Than a CSV Project
+The CSV file is only the storage format. The modeling problem is time-series smell recognition from an electronic-nose style sensor array.
+
+The pipeline uses smell-signal assumptions throughout:
+
+- one file is treated as one sensor trial, not independent rows
+- early warm-up drift is trimmed before modeling
+- each trial is resampled to a shared timeline
+- sensor channels are normalized within the trial
+- windows capture local response patterns over time
+- features describe curve shape, drift, energy, frequency balance, and cross-sensor relationships
+- window probabilities are aggregated back to one trial-level smell prediction
+
+For a junior-friendly walkthrough of the research logic, see [docs/research_workflow.md](docs/research_workflow.md). For dataset assumptions, see [docs/data_dictionary.md](docs/data_dictionary.md).
+
 ## Project Structure
 ```
 data/
@@ -46,7 +61,21 @@ src/
 	features/
 	models/
 	app/
+tests/
+	preprocess, feature, and prediction regression tests
 ```
+
+## How To Read The Code
+
+If you are reviewing this as a research project or onboarding as a junior contributor, read the files in this order:
+
+1. `docs/research_workflow.md` for the project mental model.
+2. `src/data/preprocess.py` for how raw sensor trials become comparable.
+3. `src/features/extract_features.py` for the signal features used by classical ML models.
+4. `src/models/train_baseline.py` for dataset building, splitting, model comparison, and artifact saving.
+5. `src/models/predict.py` for how the app reproduces training-time preprocessing at inference.
+6. `src/app/streamlit_app.py` for the demo layer.
+7. `tests/` for small examples of expected behavior.
 
 ## Pipeline Summary
 1. Inspect dataset structure and schema.
@@ -150,8 +179,9 @@ Current saved choices include:
 - `models/baseline/model.joblib`: older full-sequence baseline.
 - `models/baseline_v2/model.joblib`: older windowed random-forest baseline.
 - `models/baseline_windowed/model.joblib`: current strongest artifact, a windowed soft-voting ensemble.
+- `models/baseline_windowed_trialmax/model.joblib`: improved trial-level artifact selected with max window aggregation.
 
-Use the **Models** tab to compare saved metrics and see the candidate models trained inside the selected artifact.
+Use the **Models** tab to compare saved metrics and see the candidate models trained inside the selected artifact. The app selects the artifact with the highest saved trial top-1 score by default.
 
 ## Accuracy Improvement Path
 The current accuracy improvement comes from the windowed feature baseline:
@@ -166,13 +196,13 @@ The current accuracy improvement comes from the windowed feature baseline:
 Recommended training command:
 
 ```powershell
-uv run python src/models/train_baseline.py --data-root data/raw/SmellNet --output-dir models/baseline_context --window-size 100 --window-stride 25 --include-svm --use-context-features --trial-aggregation max
+uv run python src/models/train_baseline.py --data-root data/raw/SmellNet --output-dir models/baseline_windowed_trialmax --window-size 100 --window-stride 25 --include-svm --trial-aggregation max
 ```
 
 After retraining, rerun evaluation and restart Streamlit:
 
 ```powershell
-uv run python src/models/evaluate.py --model-path models/baseline_windowed/model.joblib --eval-data models/baseline_windowed/eval_data.npz --output-dir models/baseline_windowed
+uv run python src/models/evaluate.py --model-path models/baseline_windowed_trialmax/model.joblib --eval-data models/baseline_windowed_trialmax/eval_data.npz --output-dir models/baseline_windowed_trialmax --trial-aggregation max
 uv run streamlit run src/app/streamlit_app.py
 ```
 
@@ -180,13 +210,15 @@ uv run streamlit run src/app/streamlit_app.py
 
 | Model | Split Strategy | Top-1 | Top-5 | Macro F1 | Weighted F1 | Notes |
 |---|---|---:|---:|---:|---:|---|
+| Trial-max windowed logistic regression | SmellNet folder split, trial-level | 0.640 | 0.920 | 0.543 | 0.543 | Current best trial-level artifact; selected using max window aggregation |
+| Trial-max windowed logistic regression | SmellNet folder split, window-level | 0.513 | 0.780 | 0.486 | 0.486 | Same artifact before trial aggregation |
 | Contextual window random forest | SmellNet folder split, window-level | 0.596 | 0.827 | 0.506 | 0.506 | Adds whole-trial features and window position |
 | Contextual window random forest | SmellNet folder split, trial-level | 0.580 | 0.820 | 0.486 | 0.486 | Mean aggregation; max aggregation reached 0.600 trial top-1 in post-run analysis |
 | Soft-vote full windowed baseline | SmellNet folder split, window-level | 0.531 | 0.838 | 0.478 | 0.478 | 100-point windows, 25-point stride |
 | Soft-vote full windowed baseline | SmellNet folder split, trial-level | 0.600 | 0.880 | 0.509 | 0.509 | Mean aggregation; max aggregation improves top-5 to 0.900 |
 | TinySensorCNN | Group split | 0.100 | 0.300 | N/A | N/A | Experimental only; classical baseline is preferred |
 
-The saved default app model is `models/baseline_windowed/model.joblib`.
+The saved default app model is selected automatically by trial top-1; with the current artifacts this is `models/baseline_windowed_trialmax/model.joblib`.
 
 ## Limitations
 - Sensor drift and environment changes can reduce real-world robustness.

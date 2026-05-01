@@ -25,7 +25,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
-data/
+/data/
 # PyInstaller
 #   Usually these files are written by a python script from a template
 #   before PyInstaller builds the exe, so as to inject date/other infos into it.
@@ -217,4 +217,5 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 models/**/model.joblib
+!models/baseline_windowed_trialmax/model.joblib
 models/**/torch_model.pt

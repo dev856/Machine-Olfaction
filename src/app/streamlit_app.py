@@ -365,14 +365,14 @@ def render_training_options() -> None:
     st.subheader("Model Changing Options")
     st.write(
         "Model changes happen in training, then the app selects the saved `model.joblib` artifact. "
-        "The strongest current path is the windowed feature ensemble because it uses multiple windows per trial and compares several classifiers."
+        "The strongest current path is the trial-max windowed baseline because it optimizes the same trial-level aggregation used by the demo."
     )
     options = pd.DataFrame(
         [
             {"option": "Full-sequence baseline", "command flag": "--window-size 0", "tradeoff": "Fast and simple, but weaker because each CSV becomes one sample."},
             {"option": "Windowed baseline", "command flag": "--window-size 100 --window-stride 25", "tradeoff": "More training samples and better trial aggregation; current default."},
             {"option": "Contextual window baseline", "command flag": "--use-context-features", "tradeoff": "Adds whole-trial shape and window position to each window, improving the model's view of time-series structure."},
-            {"option": "Window aggregation", "command flag": "--trial-aggregation max", "tradeoff": "Uses the strongest window evidence per class at inference; improves current best trial top-5 from 88.0% to 90.0%."},
+            {"option": "Window aggregation", "command flag": "--trial-aggregation max", "tradeoff": "Uses the strongest window evidence per class at inference; current best trial metrics are 64.0% top-1 and 92.0% top-5."},
             {"option": "Include SVM", "command flag": "--include-svm", "tradeoff": "Adds an RBF SVM and a larger soft-voting ensemble; slower but can improve accuracy."},
             {"option": "Tune preprocessing", "command flag": "--target-points, --warmup-ratio", "tradeoff": "Changes signal shape seen by every model; rerun evaluation after changing."},
             {"option": "Optional sequence model", "command flag": "src/models/train_timeseries.py", "tradeoff": "Experimental PyTorch path; classical baseline is currently stronger."},
@@ -381,7 +381,7 @@ def render_training_options() -> None:
     st.dataframe(options, use_container_width=True, hide_index=True)
     st.code(
         "uv run python src/models/train_baseline.py --data-root data/raw/SmellNet "
-        "--output-dir models/baseline_context --window-size 100 --window-stride 25 --include-svm --use-context-features --trial-aggregation max",
+        "--output-dir models/baseline_windowed_trialmax --window-size 100 --window-stride 25 --include-svm --trial-aggregation max",
         language="powershell",
     )
 
@@ -427,6 +427,21 @@ def render_method_notes() -> None:
     st.dataframe(points, use_container_width=True, hide_index=True)
 
 
+def render_research_workflow() -> None:
+    st.subheader("Research Workflow")
+    workflow = pd.DataFrame(
+        [
+            {"step": "1. Trial CSV", "research question": "What does one smell exposure look like across the sensor array?", "implementation": "Treat one CSV file as one gas-sensor trial."},
+            {"step": "2. Signal cleanup", "research question": "How do we reduce sensor warm-up effects and row-count differences?", "implementation": "Fill gaps, trim warm-up rows, resample, and normalize each sensor."},
+            {"step": "3. Windowing", "research question": "Which parts of the response curve carry useful odor information?", "implementation": "Split each trial into fixed time windows."},
+            {"step": "4. Feature extraction", "research question": "How can classical ML see signal shape without raw deep learning?", "implementation": "Extract drift, slope, energy, peak timing, frequency, and cross-sensor features."},
+            {"step": "5. Model comparison", "research question": "Which baseline works best before adding complex models?", "implementation": "Compare linear, forest, boosting, SVM, and soft-voting classifiers."},
+            {"step": "6. Trial prediction", "research question": "What smell class does the whole uploaded trial most resemble?", "implementation": "Aggregate window probabilities and show top-5 alternatives."},
+        ]
+    )
+    st.dataframe(workflow, use_container_width=True, hide_index=True)
+
+
 def render_project_guide() -> None:
     st.markdown(
         """
@@ -439,6 +454,8 @@ def render_project_guide() -> None:
     )
 
     render_usecase_overview()
+    st.divider()
+    render_research_workflow()
     st.divider()
 
     st.subheader("What Makes This More Than Another CSV Classifier")
