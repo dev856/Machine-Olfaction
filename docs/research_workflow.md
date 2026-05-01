@@ -58,6 +58,8 @@ The main saved baseline is `models/baseline_windowed_trialmax`, a windowed class
 - feature names are saved with the model artifact
 - multiple classifiers are compared
 - the Streamlit app shows top-5 probabilities and confidence
+- logistic-regression predictions include feature-level sensor-response clues
+- the app includes signal analysis, ablation results, and error analysis for non-technical reviewers
 - evaluation reports both window-level and trial-level metrics
 
 The optional PyTorch model in `src/models/train_timeseries.py` is experimental. It should only become the main path after it beats the classical baseline with a comparable split and real metrics.
@@ -66,11 +68,10 @@ The optional PyTorch model in `src/models/train_timeseries.py` is experimental. 
 
 Good next steps for a research showcase:
 
-1. Add feature-importance plots for tree-based models.
-2. Add per-class error analysis from `per_class_report.csv`.
-3. Add drift experiments by evaluating classes across collection sessions if the metadata supports it.
-4. Add calibration metrics so confidence scores are easier to interpret.
-5. Add a mixture-label task instead of forcing mixture files into the base-class classifier.
+1. Add drift experiments by evaluating classes across collection sessions if the metadata supports it.
+2. Add calibration metrics so confidence scores are easier to interpret.
+3. Add mixture-label modeling instead of forcing mixture files into the base-class classifier.
+4. Add GC-MS/text priors as a separate research branch and compare whether they improve top-5 smell retrieval.
 
 ## Responsible Use
 

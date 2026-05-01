@@ -118,6 +118,7 @@ def predict_dataframe(uploaded_df: pd.DataFrame, bundle: dict[str, Any], aggrega
         "class_names": classes,
         "probabilities": proba,
         "window_probabilities": window_proba,
+        "feature_matrix": features,
         "top_indices": sorted_idx,
         "predicted_class": str(classes[sorted_idx[0]]),
         "confidence": float(proba[sorted_idx[0]]),

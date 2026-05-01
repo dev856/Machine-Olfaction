@@ -170,6 +170,8 @@ Use the sidebar **Navigation** menu to switch between:
 3. Preview raw sensor curves.
 4. Run the saved baseline model with the same preprocessing and window aggregation used during evaluation.
 5. Show predicted smell class, confidence label, analyzed window count, top-5 probabilities, and preprocessed curves.
+6. Explain which sensor-response clues supported a logistic-regression prediction.
+7. Review research evidence: ablation results, weakest classes, and common held-out test mix-ups.
 
 ## Model Selection in the App
 The Streamlit sidebar automatically discovers saved pipelines at `models/*/model.joblib`. Each option shows the artifact folder, the best classifier inside that artifact, and the trial-level top-1 metric when available.
@@ -178,7 +180,7 @@ Current saved choices include:
 
 - `models/baseline/model.joblib`: older full-sequence baseline.
 - `models/baseline_v2/model.joblib`: older windowed random-forest baseline.
-- `models/baseline_windowed/model.joblib`: current strongest artifact, a windowed soft-voting ensemble.
+- `models/baseline_windowed/model.joblib`: earlier windowed soft-voting ensemble.
 - `models/baseline_windowed_trialmax/model.joblib`: improved trial-level artifact selected with max window aggregation.
 
 Use the **Models** tab to compare saved metrics and see the candidate models trained inside the selected artifact. The app selects the artifact with the highest saved trial top-1 score by default.
@@ -189,14 +191,14 @@ The current accuracy improvement comes from the windowed feature baseline:
 - creates multiple windows from each sensor trial
 - extracts statistical, derivative, frequency, timing, and cross-sensor features
 - can add whole-trial context and window-position features with `--use-context-features`
-- can use max window aggregation with `--trial-aggregation max`; on the current best saved artifact this keeps trial top-1 at 60.0% and improves trial top-5 from 88.0% to 90.0%
-- compares logistic regression, random forest, extra trees, histogram gradient boosting, SVM, and soft-voting ensembles
+- can use max window aggregation with `--trial-aggregation max`; the current saved trial-max artifact reaches 64.0% trial top-1 and 92.0% trial top-5
+- compares logistic regression, feature-selected logistic regression, optional cross-validated logistic regression, random forest, extra trees, histogram gradient boosting, SVM, and soft-voting ensembles
 - selects the best validation model and reports held-out test metrics
 
 Recommended training command:
 
 ```powershell
-uv run python src/models/train_baseline.py --data-root data/raw/SmellNet --output-dir models/baseline_windowed_trialmax --window-size 100 --window-stride 25 --include-svm --trial-aggregation max
+uv run python src/models/train_baseline.py --data-root data/raw/SmellNet --output-dir models/baseline_windowed_trialmax --window-size 100 --window-stride 25 --include-svm --include-logistic-cv --feature-select-k 80 --trial-aggregation max
 ```
 
 After retraining, rerun evaluation and restart Streamlit:

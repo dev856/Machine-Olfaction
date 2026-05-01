@@ -49,6 +49,7 @@ def test_prediction_averages_window_probabilities() -> None:
 
     assert result["n_windows"] == 4
     assert result["predicted_class"] == "garlic"
+    assert result["feature_matrix"].shape[0] == 4
     assert np.isclose(result["probabilities"].sum(), 1.0)
 
 

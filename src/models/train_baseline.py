@@ -22,7 +22,8 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import ExtraTreesClassifier, HistGradientBoostingClassifier, VotingClassifier
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
+from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.linear_model import LogisticRegression, LogisticRegressionCV
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score, top_k_accuracy_score
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.pipeline import make_pipeline
@@ -56,6 +57,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--val-size", type=float, default=0.2, help="Validation fraction from total dataset")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--include-svm", action="store_true", help="Also train SVM baseline")
+    parser.add_argument(
+        "--feature-select-k",
+        type=int,
+        default=80,
+        help="Number of strongest engineered features used by the feature-selected logistic baseline",
+    )
+    parser.add_argument(
+        "--include-logistic-cv",
+        action="store_true",
+        help="Also train a slower cross-validated logistic-regression baseline",
+    )
     parser.add_argument(
         "--trial-aggregation",
         choices=["mean", "max", "median"],
@@ -309,6 +321,7 @@ def main() -> None:
     X_test, y_test = X[test_idx], y[test_idx]
 
     print(f"Dataset windows: train={len(X_train)}, val={len(X_val)}, test={len(X_test)}")
+    selected_feature_count = min(args.feature_select_k, X_train.shape[1])
 
     extra_trees = ExtraTreesClassifier(
         n_estimators=800,
@@ -342,6 +355,11 @@ def main() -> None:
             StandardScaler(),
             LogisticRegression(max_iter=3000, class_weight="balanced", random_state=args.seed),
         ),
+        "logistic_regression_selected": make_pipeline(
+            StandardScaler(),
+            SelectKBest(score_func=f_classif, k=selected_feature_count),
+            LogisticRegression(max_iter=3000, class_weight="balanced", random_state=args.seed),
+        ),
         "random_forest": random_forest,
         "extra_trees": extra_trees,
         "hist_gradient_boosting": hist_gradient_boosting,
@@ -356,6 +374,20 @@ def main() -> None:
             n_jobs=-1,
         ),
     }
+
+    if args.include_logistic_cv:
+        models["logistic_regression_cv_selected"] = make_pipeline(
+            StandardScaler(),
+            SelectKBest(score_func=f_classif, k=selected_feature_count),
+            LogisticRegressionCV(
+                Cs=(0.03, 0.1, 0.3, 1.0, 3.0, 10.0),
+                cv=3,
+                max_iter=4000,
+                class_weight="balanced",
+                random_state=args.seed,
+                n_jobs=-1,
+            ),
+        )
 
     if args.include_svm:
         models["svm_rbf"] = svm_rbf
@@ -492,6 +524,7 @@ def main() -> None:
         "split_strategy": "folder" if has_folder_split else "random_group",
         "feature_mode": feature_mode,
         "trial_aggregation": args.trial_aggregation,
+        "feature_select_k": selected_feature_count,
     }
 
     with (output_dir / "metrics.json").open("w", encoding="utf-8") as f:

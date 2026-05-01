@@ -15,6 +15,7 @@ It is not intended for food safety, allergen detection, medical decisions, hazar
 - Windowing: 100 time points with stride 25
 - Trial aggregation: max probability across windows, normalized before scoring
 - Features: statistical, shape, derivative, low/high frequency, and cross-sensor interaction features
+- App explanation: logistic-regression coefficients are shown as plain-language sensor-response clues for each prediction
 
 ## Evaluation
 
@@ -29,7 +30,7 @@ Trial-level metrics aggregate window probabilities for each original CSV before 
 
 ## Limitations
 
-- Performance is uneven across classes; inspect `models/baseline_windowed/per_class_report.csv` before drawing class-specific conclusions.
+- Performance is uneven across classes; inspect `models/baseline_windowed_trialmax/per_class_report.csv` or the app's Research Evidence tab before drawing class-specific conclusions.
 - The model assumes the same sensor schema and similar collection conditions as SmellNet.
 - Gas sensor drift, humidity, temperature, hardware differences, and acquisition timing can reduce reliability.
 - Mixture samples are not modeled as mixture labels by this baseline.

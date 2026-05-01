@@ -19,6 +19,15 @@ from src.models.pipeline_io import load_pipeline
 from src.models.predict import predict_dataframe, validate_uploaded_schema
 
 
+METRIC_EXPLANATIONS: dict[str, str] = {
+    "Trial Top-1": "Percent of full CSV trials where the model's first choice is the correct smell class.",
+    "Trial Top-5": "Percent of full CSV trials where the correct smell class appears anywhere in the five most likely predictions.",
+    "Window Top-1": "Percent of individual time windows classified correctly before windows are combined into one CSV-level prediction.",
+    "Macro F1": "Average F1 score across smell classes, treating each class equally.",
+    "Weighted F1": "Average F1 score weighted by class support.",
+}
+
+
 @st.cache_resource(show_spinner=False)
 def cached_load_pipeline(model_path: str) -> dict[str, Any]:
     return load_pipeline(Path(model_path))
@@ -150,6 +159,14 @@ def discover_model_artifacts(models_root: Path = Path("models")) -> list[Path]:
     return sorted(models_root.glob("*/model.joblib"))
 
 
+def project_relative_path(path: Path | str) -> str:
+    path_obj = Path(path)
+    try:
+        return path_obj.resolve().relative_to(ROOT).as_posix()
+    except ValueError:
+        return path_obj.as_posix()
+
+
 def metric_value(metrics: dict, key: str) -> float | None:
     test_metrics = metrics.get("test_metrics", {})
     value = test_metrics.get(key)
@@ -183,7 +200,7 @@ def model_comparison_rows(model_paths: list[Path]) -> pd.DataFrame:
                 "macro_f1": test_metrics.get("trial_macro_f1", test_metrics.get("macro_f1")),
                 "window_top1": test_metrics.get("top1_accuracy"),
                 "classes": len(metrics.get("class_names", [])) or None,
-                "path": str(path),
+                "artifact_file": project_relative_path(path),
             }
         )
     return pd.DataFrame(rows)
@@ -214,6 +231,18 @@ def display_sample_name(value: str, sample_root: Path) -> str:
         return str(path.relative_to(sample_root))
     except ValueError:
         return path.name
+
+
+def display_source_name(value: str | None, sample_root: Path) -> str:
+    if not value:
+        return "No input selected"
+    path = Path(value)
+    if not path.exists():
+        return path.name
+    try:
+        return str(path.relative_to(sample_root))
+    except ValueError:
+        return project_relative_path(path)
 
 
 def load_metrics(model_path: Path) -> dict:
@@ -303,6 +332,177 @@ def plot_top_predictions(top5_df: pd.DataFrame) -> None:
     st.pyplot(fig, use_container_width=True)
 
 
+def plain_feature_name(feature_name: str) -> str:
+    if "__x__" in feature_name:
+        parts = feature_name.split("__")
+        if len(parts) >= 5:
+            return f"relationship between {parts[0]} and {parts[2]} ({parts[-1].replace('_', ' ')})"
+    if "__" in feature_name:
+        sensor, measure = feature_name.split("__", 1)
+        return f"{sensor} sensor {measure.replace('_', ' ')}"
+    return feature_name.replace("_", " ")
+
+
+def linear_explanation_rows(bundle: dict[str, Any], result: dict[str, Any], limit: int = 8) -> pd.DataFrame:
+    model = bundle["model"]
+    feature_names = list(bundle.get("feature_names") or [])
+    features = result.get("feature_matrix")
+    if features is None or not feature_names:
+        return pd.DataFrame()
+
+    transformed = np.asarray(features)
+    active_names = feature_names.copy()
+    classifier = model
+
+    if hasattr(model, "steps"):
+        for _, step in model.steps[:-1]:
+            if hasattr(step, "transform"):
+                transformed = step.transform(transformed)
+            if hasattr(step, "get_support"):
+                support = step.get_support()
+                active_names = [name for name, keep in zip(active_names, support) if keep]
+        classifier = model.steps[-1][1]
+
+    if not hasattr(classifier, "coef_"):
+        return pd.DataFrame()
+
+    predicted_label = result["predicted_class"]
+    class_names = list(bundle["label_encoder"].classes_)
+    predicted_index = class_names.index(predicted_label)
+    classifier_classes = list(getattr(classifier, "classes_", range(len(class_names))))
+    class_position = classifier_classes.index(predicted_index) if predicted_index in classifier_classes else predicted_index
+
+    mean_feature_values = np.asarray(transformed).mean(axis=0)
+    coefficients = np.asarray(classifier.coef_)[class_position]
+    contributions = mean_feature_values * coefficients
+    order = np.argsort(contributions)[::-1][:limit]
+
+    rows = []
+    for idx in order:
+        rows.append(
+            {
+                "sensor signal clue": plain_feature_name(active_names[idx]),
+                "effect": "pushed prediction higher",
+                "strength": round(float(contributions[idx]), 3),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def render_prediction_explanation(bundle: dict[str, Any], result: dict[str, Any]) -> None:
+    st.subheader("Why This Prediction?")
+    st.write(
+        "For this model, the app looks at the cleaned sensor response windows and identifies which engineered signal clues most supported the predicted smell."
+    )
+    explanation = linear_explanation_rows(bundle, result)
+    if explanation.empty:
+        st.info(
+            "This selected model does not expose simple linear feature weights. "
+            "Use the logistic-regression artifact to see feature-level explanations."
+        )
+        return
+    st.dataframe(explanation, use_container_width=True, hide_index=True)
+    st.caption(
+        "These are model clues, not chemical proof. They summarize patterns such as sensor slope, response energy, peak timing, and cross-sensor relationships."
+    )
+
+
+def render_signal_analysis(df: pd.DataFrame, time_col: str | None, sensor_cols: list[str]) -> None:
+    st.subheader("Sensor Response Analysis")
+    st.write(
+        "This view treats the uploaded file as a sensor recording over time. The goal is to inspect the response curves before thinking about the classifier."
+    )
+    plot_sensor_curves(df, time_col, sensor_cols, title="Raw gas sensor response curves")
+
+    summary = (
+        df[sensor_cols]
+        .agg(["mean", "std", "min", "max"])
+        .T.reset_index()
+        .rename(columns={"index": "sensor", "mean": "average response", "std": "variation", "min": "lowest reading", "max": "highest reading"})
+    )
+    st.dataframe(summary.round(4), use_container_width=True, hide_index=True)
+    st.caption("Large variation, slope, timing, and cross-sensor differences are the kind of signals the model turns into features.")
+
+
+def render_research_summary(metrics: dict) -> None:
+    test_metrics = metrics.get("test_metrics", {})
+    st.subheader("Research Summary")
+    st.markdown(
+        """
+        **Research question:** Can low-cost gas sensor response curves distinguish smell classes?
+
+        **Method:** Clean each sensor trial, split it into time windows, extract signal-shape features, compare classical baselines, and score full-trial predictions.
+        """
+    )
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Smell classes", f"{len(metrics.get('class_names', []))}")
+    c2.metric("Trial Top-1", f"{test_metrics.get('trial_top1_accuracy', 0.0) * 100:.1f}%", help=METRIC_EXPLANATIONS["Trial Top-1"])
+    c3.metric("Trial Top-5", f"{test_metrics.get('trial_top5_accuracy', 0.0) * 100:.1f}%", help=METRIC_EXPLANATIONS["Trial Top-5"])
+
+
+def render_ablation_study(comparison_df: pd.DataFrame) -> None:
+    st.subheader("Ablation Study")
+    st.write("This table shows how design choices affect full-CSV smell prediction. Higher trial metrics mean better user-facing predictions.")
+    if comparison_df.empty:
+        st.info("No model metrics are available yet.")
+        return
+    ablation = comparison_df[["artifact", "feature_mode", "trial_top1", "trial_top5", "window_top1"]].copy()
+    ablation = ablation.sort_values("trial_top1", ascending=False, na_position="last")
+    for col in ["trial_top1", "trial_top5", "window_top1"]:
+        ablation[col] = ablation[col].map(lambda value: "" if pd.isna(value) else f"{value * 100:.1f}%")
+    ablation = ablation.rename(
+        columns={
+            "artifact": "model setup",
+            "feature_mode": "feature style",
+            "trial_top1": "Full CSV correct first guess",
+            "trial_top5": "Full CSV correct in top 5",
+            "window_top1": "Window-level correct first guess",
+        }
+    )
+    st.dataframe(ablation, use_container_width=True, hide_index=True)
+
+
+def render_error_analysis(metrics: dict, model_path: Path) -> None:
+    st.subheader("Error Analysis")
+    class_report = metrics.get("class_report", {})
+    class_names = metrics.get("class_names", [])
+    rows = []
+    for name in class_names:
+        report = class_report.get(name, {})
+        rows.append(
+            {
+                "smell class": name,
+                "recall": report.get("recall"),
+                "precision": report.get("precision"),
+                "f1": report.get("f1-score"),
+            }
+        )
+    if rows:
+        report_df = pd.DataFrame(rows).sort_values("f1", ascending=True, na_position="last")
+        st.write("Lowest-F1 classes are where the current sensor-feature baseline struggles most.")
+        st.dataframe(report_df.head(12).round(3), use_container_width=True, hide_index=True)
+
+    cm_path = model_path.parent / "confusion_matrix.npy"
+    if not cm_path.exists() or not class_names:
+        return
+    cm = np.load(cm_path)
+    confusions = []
+    for true_idx, true_name in enumerate(class_names):
+        for pred_idx, pred_name in enumerate(class_names):
+            if true_idx != pred_idx and cm[true_idx, pred_idx] > 0:
+                confusions.append(
+                    {
+                        "actual smell": true_name,
+                        "predicted as": pred_name,
+                        "count": int(cm[true_idx, pred_idx]),
+                    }
+                )
+    if confusions:
+        confusion_df = pd.DataFrame(confusions).sort_values("count", ascending=False).head(12)
+        st.write("Most common mix-ups on the held-out test split:")
+        st.dataframe(confusion_df, use_container_width=True, hide_index=True)
+
+
 def render_model_metrics(metrics: dict) -> None:
     test_metrics = metrics.get("test_metrics", {})
     if not test_metrics:
@@ -310,9 +510,9 @@ def render_model_metrics(metrics: dict) -> None:
         return
 
     m1, m2, m3 = st.columns(3)
-    m1.metric("Trial Top-1", f"{test_metrics.get('trial_top1_accuracy', 0.0) * 100:.1f}%")
-    m2.metric("Trial Top-5", f"{test_metrics.get('trial_top5_accuracy', 0.0) * 100:.1f}%")
-    m3.metric("Macro F1", f"{test_metrics.get('trial_macro_f1', 0.0):.3f}")
+    m1.metric("Trial Top-1", f"{test_metrics.get('trial_top1_accuracy', 0.0) * 100:.1f}%", help=METRIC_EXPLANATIONS["Trial Top-1"])
+    m2.metric("Trial Top-5", f"{test_metrics.get('trial_top5_accuracy', 0.0) * 100:.1f}%", help=METRIC_EXPLANATIONS["Trial Top-5"])
+    m3.metric("Macro F1", f"{test_metrics.get('trial_macro_f1', 0.0):.3f}", help=METRIC_EXPLANATIONS["Macro F1"])
     st.caption(f"Best trained model: {metrics.get('best_model', 'unknown')} | Split: {metrics.get('split_strategy', 'unknown')}")
 
 
@@ -358,7 +558,32 @@ def render_model_comparison(comparison_df: pd.DataFrame) -> None:
     display = comparison_df.copy()
     for col in ["trial_top1", "trial_top5", "macro_f1", "window_top1"]:
         display[col] = display[col].map(lambda value: "" if pd.isna(value) else f"{value * 100:.1f}%" if col != "macro_f1" else f"{value:.3f}")
+    display = display.rename(
+        columns={
+            "artifact": "artifact",
+            "best_model": "selected_model",
+            "split": "split",
+            "feature_mode": "feature_mode",
+            "trial_top1": "Trial Top-1",
+            "trial_top5": "Trial Top-5",
+            "macro_f1": "Trial Macro F1",
+            "window_top1": "Window Top-1",
+            "classes": "classes",
+            "artifact_file": "artifact file",
+        }
+    )
     st.dataframe(display, use_container_width=True, hide_index=True)
+
+
+def render_metric_glossary() -> None:
+    st.subheader("Metric Glossary")
+    glossary = pd.DataFrame(
+        [
+            {"metric": name, "plain meaning": meaning}
+            for name, meaning in METRIC_EXPLANATIONS.items()
+        ]
+    )
+    st.dataframe(glossary, use_container_width=True, hide_index=True)
 
 
 def render_training_options() -> None:
@@ -373,6 +598,8 @@ def render_training_options() -> None:
             {"option": "Windowed baseline", "command flag": "--window-size 100 --window-stride 25", "tradeoff": "More training samples and better trial aggregation; current default."},
             {"option": "Contextual window baseline", "command flag": "--use-context-features", "tradeoff": "Adds whole-trial shape and window position to each window, improving the model's view of time-series structure."},
             {"option": "Window aggregation", "command flag": "--trial-aggregation max", "tradeoff": "Uses the strongest window evidence per class at inference; current best trial metrics are 64.0% top-1 and 92.0% top-5."},
+            {"option": "Feature-selected logistic baseline", "command flag": "--feature-select-k 80", "tradeoff": "Keeps the strongest engineered signal features before logistic regression, which can reduce noisy feature effects."},
+            {"option": "Cross-validated logistic baseline", "command flag": "--include-logistic-cv", "tradeoff": "Tunes logistic-regression strength automatically; slower, but useful for accuracy experiments."},
             {"option": "Include SVM", "command flag": "--include-svm", "tradeoff": "Adds an RBF SVM and a larger soft-voting ensemble; slower but can improve accuracy."},
             {"option": "Tune preprocessing", "command flag": "--target-points, --warmup-ratio", "tradeoff": "Changes signal shape seen by every model; rerun evaluation after changing."},
             {"option": "Optional sequence model", "command flag": "src/models/train_timeseries.py", "tradeoff": "Experimental PyTorch path; classical baseline is currently stronger."},
@@ -381,7 +608,7 @@ def render_training_options() -> None:
     st.dataframe(options, use_container_width=True, hide_index=True)
     st.code(
         "uv run python src/models/train_baseline.py --data-root data/raw/SmellNet "
-        "--output-dir models/baseline_windowed_trialmax --window-size 100 --window-stride 25 --include-svm --trial-aggregation max",
+        "--output-dir models/baseline_windowed_trialmax --window-size 100 --window-stride 25 --include-svm --include-logistic-cv --feature-select-k 80 --trial-aggregation max",
         language="powershell",
     )
 
@@ -457,6 +684,8 @@ def render_project_guide() -> None:
     st.divider()
     render_research_workflow()
     st.divider()
+    render_metric_glossary()
+    st.divider()
 
     st.subheader("What Makes This More Than Another CSV Classifier")
     st.write(
@@ -501,6 +730,8 @@ def render_project_guide() -> None:
             {"where": "Sidebar > Sample CSV", "what you do there": "Pick a demo SmellNet CSV, or upload your own CSV in the main page."},
             {"where": "Prediction Demo > Overview", "what you do there": "Confirm the use case, selected model health, and whether the CSV schema is valid."},
             {"where": "Prediction Demo > Prediction Results", "what you do there": "See the predicted smell, confidence score, top-5 classes, and sensor curves."},
+            {"where": "Prediction Demo > Signal Analysis", "what you do there": "Inspect the gas sensor response curves and sensor summary before looking at the model."},
+            {"where": "Prediction Demo > Research Evidence", "what you do there": "Read the research question, ablation table, and error analysis in plain language."},
             {"where": "Prediction Demo > CSV Details", "what you do there": "Inspect detected sensors, missing columns, and raw CSV rows."},
             {"where": "Prediction Demo > Models", "what you do there": "Compare saved model artifacts and see the model-changing training options."},
             {"where": "Prediction Demo > Method", "what you do there": "Understand preprocessing, feature extraction, evaluation, and limitations."},
@@ -554,7 +785,9 @@ def main() -> None:
             help="Choose which saved pipeline artifact to use for prediction.",
         )
         model_path = Path(selected_model)
-        sample_root = Path(st.text_input("Sample CSV folder", value="data/samples"))
+        with st.expander("Advanced local settings", expanded=False):
+            st.caption("For deployed demos, keep this as the bundled sample folder unless you are running locally with a different dataset layout.")
+            sample_root = Path(st.text_input("Sample CSV folder", value="data/samples"))
         samples = sample_csvs(sample_root)
         sample_options = [""] + [str(path) for path in samples]
         default_sample_index = 1 if samples else 0
@@ -566,7 +799,7 @@ def main() -> None:
             format_func=lambda value: display_sample_name(value, sample_root),
         )
         if samples:
-            st.caption(f"{len(samples)} real demo CSVs found in {sample_root}.")
+            st.caption(f"{len(samples)} bundled demo CSVs available.")
         else:
             st.caption("No demo CSVs found. Run the sample creation command from README.")
         auto_predict = st.checkbox("Analyze selected CSV automatically", value=True)
@@ -587,7 +820,7 @@ def main() -> None:
     df, source_name = load_input_dataframe(uploaded, selected_sample)
 
     if not model_path.exists():
-        st.error(f"Model artifact not found: {model_path}")
+        st.error(f"Model artifact not found: {project_relative_path(model_path)}")
         return
 
     try:
@@ -599,7 +832,9 @@ def main() -> None:
     metrics = load_metrics(model_path)
     trained_sensor_cols = list(bundle["sensor_columns"])
 
-    overview_tab, predict_tab, details_tab, models_tab, method_tab = st.tabs(["Overview", "Prediction Results", "CSV Details", "Models", "Method"])
+    overview_tab, predict_tab, signal_tab, research_tab, details_tab, models_tab, method_tab = st.tabs(
+        ["Overview", "Prediction Results", "Signal Analysis", "Research Evidence", "CSV Details", "Models", "Method"]
+    )
 
     with overview_tab:
         render_usecase_overview()
@@ -621,7 +856,7 @@ def main() -> None:
                 c1.metric("Rows", f"{len(df):,}")
                 c2.metric("Columns", f"{len(df.columns):,}")
                 c3.metric("Sensors", f"{len(detected_sensor_cols):,}")
-                st.caption(f"Source: {source_name}")
+                st.caption(f"Source: {display_source_name(source_name, sample_root)}")
                 if missing_cols:
                     st.error(f"Missing expected sensors: {missing_cols}")
                 else:
@@ -680,6 +915,8 @@ def main() -> None:
                 st.subheader("Probability Table")
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
+            render_prediction_explanation(bundle, result)
+
             with st.expander("Preprocessed signal used by the model", expanded=False):
                 processed_df = result["processed_df"]
                 st.caption(f"Shape after preprocessing: {processed_df.shape}")
@@ -691,6 +928,16 @@ def main() -> None:
         st.subheader("Sensor Curves")
         plot_sensor_curves(df, time_col, trained_sensor_cols, title="Raw sensor response")
 
+    with signal_tab:
+        render_signal_analysis(df, time_col, trained_sensor_cols)
+
+    with research_tab:
+        render_research_summary(metrics)
+        st.divider()
+        render_ablation_study(comparison_df)
+        st.divider()
+        render_error_analysis(metrics, model_path)
+
     with details_tab:
         st.subheader("Schema and CSV Preview")
         render_schema_panel(df, trained_sensor_cols, detected_sensor_cols, missing_cols)
@@ -699,6 +946,7 @@ def main() -> None:
     with models_tab:
         st.subheader("Saved Model Comparison")
         render_model_comparison(comparison_df)
+        render_metric_glossary()
         render_training_options()
         if metrics.get("val_results"):
             st.subheader("Validation Candidates Inside Selected Artifact")
