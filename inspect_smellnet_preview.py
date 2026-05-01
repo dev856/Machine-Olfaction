@@ -33,6 +33,7 @@ def main():
         for path in sorted(scan_root.rglob("*.csv"))
         if ".cache" not in path.parts
     ]
+    #test that we can read the first few lines of each CSV file without loading the entire dataset into memory
     print(f"Dataset root: {data_dir}")
     print(f"Scan root: {scan_root}")
     print(f"Total CSV files found: {len(csv_files)}")
