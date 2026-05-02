@@ -5,9 +5,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
 import streamlit as st
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -255,55 +256,57 @@ def load_metrics(model_path: Path) -> dict:
         return {}
 
 
-def plot_theme() -> dict[str, str]:
+def get_plotly_template() -> str:
+    """Get Plotly template based on Streamlit theme."""
     if st.get_option("theme.base") == "dark":
-        return {
-            "face": "#161b22",
-            "text": "#edf6f7",
-            "grid": "#34454c",
-            "spine": "#4d6168",
-        }
-    return {
-        "face": "#ffffff",
-        "text": "#183c40",
-        "grid": "#d7e1e4",
-        "spine": "#9fb2b7",
-    }
+        return "plotly_dark"
+    return "plotly_white"
 
 
-def apply_plot_theme(fig, ax) -> None:
-    colors = plot_theme()
-    fig.patch.set_facecolor(colors["face"])
-    ax.set_facecolor(colors["face"])
-    ax.title.set_color(colors["text"])
-    ax.xaxis.label.set_color(colors["text"])
-    ax.yaxis.label.set_color(colors["text"])
-    ax.tick_params(colors=colors["text"])
-    ax.grid(color=colors["grid"], alpha=0.35)
-    for spine in ax.spines.values():
-        spine.set_color(colors["spine"])
-
-
-def plot_sensor_curves(df: pd.DataFrame, time_col: str | None, sensor_cols: list[str], title: str) -> None:
-    fig, ax = plt.subplots(figsize=(10.6, 4.6))
-    apply_plot_theme(fig, ax)
+def plot_sensor_curves_interactive(df: pd.DataFrame, time_col: str | None, sensor_cols: list[str], title: str) -> None:
+    """Create interactive Plotly chart for sensor curves with hover tooltips."""
     x = df[time_col] if time_col and time_col in df.columns else np.arange(len(df))
-    x_label = time_col if time_col and time_col in df.columns else "sample_index"
-
-    for col in sensor_cols:
-        ax.plot(x, df[col], label=col, linewidth=1.35, alpha=0.82)
-
-    ax.set_title(title)
-    ax.set_xlabel(x_label)
-    ax.set_ylabel("Sensor response")
-    apply_plot_theme(fig, ax)
-    legend = ax.legend(loc="upper right", fontsize=8, ncols=2, frameon=True)
-    legend.get_frame().set_facecolor(plot_theme()["face"])
-    legend.get_frame().set_edgecolor(plot_theme()["spine"])
-    for text in legend.get_texts():
-        text.set_color(plot_theme()["text"])
-    fig.tight_layout()
-    st.pyplot(fig, use_container_width=True)
+    x_label = time_col if time_col and time_col in df.columns else "Sample Index"
+    
+    fig = go.Figure()
+    
+    # Color palette for sensors
+    colors = px.colors.qualitative.Set2 + px.colors.qualitative.Pastel1
+    
+    for idx, col in enumerate(sensor_cols):
+        fig.add_trace(
+            go.Scatter(
+                x=x,
+                y=df[col],
+                name=col,
+                mode='lines',
+                line=dict(width=2, color=colors[idx % len(colors)]),
+                hovertemplate=f'<b>{col}</b><br>Time: %{{x:.2f}}<br>Response: %{{y:.4f}}<extra></extra>'
+            )
+        )
+    
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=16, weight="bold")),
+        xaxis_title=x_label,
+        yaxis_title="Sensor Response",
+        hovermode='x unified',
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            bgcolor="rgba(255,255,255,0.5)"
+        ),
+        template=get_plotly_template(),
+        height=450,
+        margin=dict(l=60, r=30, t=60, b=60),
+    )
+    
+    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor="rgba(128,128,128,0.2)")
+    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor="rgba(128,128,128,0.2)")
+    
+    st.plotly_chart(fig, use_container_width=True)
 
 
 def confidence_label(confidence: float) -> tuple[str, str]:
@@ -314,22 +317,87 @@ def confidence_label(confidence: float) -> tuple[str, str]:
     return "Low", "The signal is ambiguous for the current model; treat this as exploratory."
 
 
-def plot_top_predictions(top5_df: pd.DataFrame) -> None:
-    fig, ax = plt.subplots(figsize=(8.5, 3.8))
-    apply_plot_theme(fig, ax)
+def plot_top_predictions_interactive(top5_df: pd.DataFrame) -> None:
+    """Create interactive horizontal bar chart for top predictions."""
     ordered = top5_df.iloc[::-1]
+    
+    # Create colors - highlight the top prediction
     colors = ["#8aa6a9"] * len(ordered)
     if colors:
-        colors[-1] = "#2f6f73"
-    ax.barh(ordered["class"], ordered["probability"], color=colors)
-    ax.set_xlim(0.0, 1.0)
-    ax.set_xlabel("Mean window probability")
-    apply_plot_theme(fig, ax)
-    ax.grid(axis="x", color=plot_theme()["grid"], alpha=0.35)
-    for spine in ("top", "right", "left"):
-        ax.spines[spine].set_visible(False)
-    fig.tight_layout()
-    st.pyplot(fig, use_container_width=True)
+        colors[-1] = "#2f6f73"  # Highlight top prediction
+    
+    fig = go.Figure()
+    
+    fig.add_trace(
+        go.Bar(
+            y=ordered["class"],
+            x=ordered["probability"],
+            orientation='h',
+            marker_color=colors,
+            hovertemplate='<b>%{y}</b><br>Probability: %{x:.2%}<extra></extra>'
+        )
+    )
+    
+    fig.update_layout(
+        title=dict(text="Top 5 Predictions", font=dict(size=16, weight="bold")),
+        xaxis_title="Mean Window Probability",
+        xaxis=dict(range=[0, 1], showgrid=True, gridcolor="rgba(128,128,128,0.2)"),
+        yaxis=dict(showgrid=False),
+        template=get_plotly_template(),
+        height=350,
+        margin=dict(l=60, r=30, t=50, b=40),
+        showlegend=False
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def plot_confidence_gauge(confidence: float, predicted_class: str) -> None:
+    """Create a gauge chart showing prediction confidence."""
+    # Determine color based on confidence level
+    if confidence >= 0.70:
+        gauge_color = "#27ae60"  # Green - High confidence
+        status_text = "High Confidence"
+    elif confidence >= 0.40:
+        gauge_color = "#f39c12"  # Orange - Medium confidence
+        status_text = "Medium Confidence"
+    else:
+        gauge_color = "#e74c3c"  # Red - Low confidence
+        status_text = "Low Confidence"
+    
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number+delta",
+        value=confidence * 100,
+        domain={'x': [0, 1], 'y': [0, 1]},
+        title={'text': f"Prediction Confidence<br><span style='font-size: 0.8em; color: gray'>{predicted_class}</span>", 
+               'font': {'size': 14}},
+        delta={'reference': 50, 'increasing': {'color': gauge_color}},
+        gauge={
+            'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "gray"},
+            'bar': {'color': gauge_color},
+            'bgcolor': "white",
+            'borderwidth': 2,
+            'bordercolor': "gray",
+            'steps': [
+                {'range': [0, 40], 'color': 'rgba(231, 76, 60, 0.2)'},
+                {'range': [40, 70], 'color': 'rgba(243, 156, 18, 0.2)'},
+                {'range': [70, 100], 'color': 'rgba(39, 174, 96, 0.2)'}
+            ],
+            'threshold': {
+                'line': {'color': "red", 'width': 4},
+                'thickness': 0.75,
+                'value': 70
+            }
+        }
+    ))
+    
+    fig.update_layout(
+        height=250,
+        margin=dict(l=20, r=20, t=40, b=20),
+        template=get_plotly_template(),
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
 
 
 def plain_feature_name(feature_name: str) -> str:
@@ -412,7 +480,7 @@ def render_signal_analysis(df: pd.DataFrame, time_col: str | None, sensor_cols: 
     st.write(
         "This view treats the uploaded file as a sensor recording over time. The goal is to inspect the response curves before thinking about the classifier."
     )
-    plot_sensor_curves(df, time_col, sensor_cols, title="Raw gas sensor response curves")
+    plot_sensor_curves_interactive(df, time_col, sensor_cols, title="Raw Gas Sensor Response Curves")
 
     summary = (
         df[sensor_cols]
@@ -899,17 +967,23 @@ def main() -> None:
                 """,
                 unsafe_allow_html=True,
             )
-            r1, r2, r3, r4 = st.columns(4)
-            r1.metric("Predicted smell", result["predicted_class"])
-            r2.metric("Confidence", f"{result['confidence'] * 100:.1f}%")
-            r3.metric("Confidence band", confidence_name)
-            r4.metric("Windows", result["n_windows"])
-            st.info(confidence_text)
+            # Create visual metrics row with confidence gauge
+            col_gauge, col_metrics = st.columns([1, 2])
+            
+            with col_gauge:
+                plot_confidence_gauge(result["confidence"], result["predicted_class"])
+            
+            with col_metrics:
+                r1, r2, r3 = st.columns(3)
+                r1.metric("Predicted Smell", result["predicted_class"])
+                r2.metric("Confidence", f"{result['confidence'] * 100:.1f}%")
+                r3.metric("Analyzed Windows", result["n_windows"])
+                st.info(confidence_text)
 
             left, right = st.columns([1.0, 1.0])
             with left:
                 st.subheader("Top-5 Predictions")
-                plot_top_predictions(top5_df)
+                plot_top_predictions_interactive(top5_df)
             with right:
                 display_df = top5_df.assign(probability=lambda x: (x["probability"] * 100).round(2))
                 st.subheader("Probability Table")
@@ -917,16 +991,16 @@ def main() -> None:
 
             render_prediction_explanation(bundle, result)
 
-            with st.expander("Preprocessed signal used by the model", expanded=False):
+            with st.expander("Preprocessed Signal Used by the Model", expanded=False):
                 processed_df = result["processed_df"]
                 st.caption(f"Shape after preprocessing: {processed_df.shape}")
                 st.dataframe(processed_df.head(30), use_container_width=True)
-                plot_sensor_curves(processed_df, "time", trained_sensor_cols, title="Preprocessed model input")
+                plot_sensor_curves_interactive(processed_df, "time", trained_sensor_cols, title="Preprocessed Model Input")
         else:
-            st.info("Click `Analyze smell signal` to run the selected model on this CSV.")
+            st.info("Click `Analyze Smell Signal` to run the selected model on this CSV.")
 
         st.subheader("Sensor Curves")
-        plot_sensor_curves(df, time_col, trained_sensor_cols, title="Raw sensor response")
+        plot_sensor_curves_interactive(df, time_col, trained_sensor_cols, title="Raw Sensor Response")
 
     with signal_tab:
         render_signal_analysis(df, time_col, trained_sensor_cols)
