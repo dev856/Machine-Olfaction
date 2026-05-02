@@ -39,16 +39,36 @@ Implemented signal ideas:
 
 Start here if you are new to the repository:
 
-| File | Purpose |
-|---|---|
-| `inspect_smellnet_preview.py` | Quick dataset inspection before training. |
-| `src/data/preprocess.py` | All CSV cleaning and time-series standardization. |
-| `src/features/extract_features.py` | Converts sensor windows into fixed ML features. |
-| `src/models/train_baseline.py` | End-to-end classical model training script. |
-| `src/models/evaluate.py` | Recomputes metrics and confusion-matrix artifacts. |
-| `src/models/predict.py` | Shared inference path used by the app. |
-| `src/app/streamlit_app.py` | Research demo UI for uploads, plots, predictions, and model comparison. |
-| `tests/` | Small regression tests for preprocessing, features, and prediction. |
+| File | Purpose | Difficulty Level |
+|---|---|---|
+| `docs/QUICK_START_GUIDE.md` | **Beginner-friendly guide** for non-technical users with step-by-step instructions. | ⭐ Easy |
+| `inspect_smellnet_preview.py` | Quick dataset inspection before training. | ⭐⭐ Medium |
+| `src/data/preprocess.py` | All CSV cleaning and time-series standardization. | ⭐⭐ Medium |
+| `src/features/extract_features.py` | Converts sensor windows into fixed ML features. | ⭐⭐⭐ Advanced |
+| `src/models/train_baseline.py` | End-to-end classical model training script. | ⭐⭐⭐ Advanced |
+| `src/models/evaluate.py` | Recomputes metrics and confusion-matrix artifacts. | ⭐⭐ Medium |
+| `src/models/predict.py` | Shared inference path used by the app. | ⭐⭐ Medium |
+| `src/app/streamlit_app.py` | Research demo UI for uploads, plots, predictions, and model comparison. | ⭐⭐ Medium |
+| `tests/` | Small regression tests for preprocessing, features, and prediction. | ⭐⭐ Medium |
+
+### Learning Path Recommendations
+
+**For Non-Technical Users:**
+1. Start with `docs/QUICK_START_GUIDE.md`
+2. Run the Streamlit app and explore the Project Guide tab
+3. Try sample predictions before uploading your own data
+
+**For Junior Developers:**
+1. Read `docs/QUICK_START_GUIDE.md` to understand the user experience
+2. Review `docs/research_workflow.md` for the technical mental model
+3. Examine `src/data/preprocess.py` to see data transformations
+4. Explore the Streamlit app code to understand the UI flow
+
+**For Researchers/ML Engineers:**
+1. Start with `docs/research_workflow.md` and `docs/model_card.md`
+2. Dive into `src/features/extract_features.py` for feature engineering
+3. Review `src/models/train_baseline.py` for training strategies
+4. Check `tests/` for expected behavior examples
 
 ## Current Baseline Choice
 

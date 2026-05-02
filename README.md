@@ -69,13 +69,14 @@ tests/
 
 If you are reviewing this as a research project or onboarding as a junior contributor, read the files in this order:
 
-1. `docs/research_workflow.md` for the project mental model.
-2. `src/data/preprocess.py` for how raw sensor trials become comparable.
-3. `src/features/extract_features.py` for the signal features used by classical ML models.
-4. `src/models/train_baseline.py` for dataset building, splitting, model comparison, and artifact saving.
-5. `src/models/predict.py` for how the app reproduces training-time preprocessing at inference.
-6. `src/app/streamlit_app.py` for the demo layer.
-7. `tests/` for small examples of expected behavior.
+1. `docs/QUICK_START_GUIDE.md` - **Start here if you're new!** A friendly guide for non-technical users.
+2. `docs/research_workflow.md` for the project mental model.
+3. `src/data/preprocess.py` for how raw sensor trials become comparable.
+4. `src/features/extract_features.py` for the signal features used by classical ML models.
+5. `src/models/train_baseline.py` for dataset building, splitting, model comparison, and artifact saving.
+6. `src/models/predict.py` for how the app reproduces training-time preprocessing at inference.
+7. `src/app/streamlit_app.py` for the demo layer.
+8. `tests/` for small examples of expected behavior.
 
 ## Pipeline Summary
 1. Inspect dataset structure and schema.
@@ -163,6 +164,7 @@ uv run streamlit run src/app/streamlit_app.py
 Use the sidebar **Navigation** menu to switch between:
 
 - **Project Guide**: explains the project use case, why it is useful, how to navigate the app, and key limitations.
+  - 📘 **New!** Also see `docs/QUICK_START_GUIDE.md` for a beginner-friendly walkthrough with screenshots and FAQs.
 - **Prediction Demo**: loads saved models, accepts demo/uploaded CSVs, and shows model predictions.
 
 1. Upload a sensor CSV or choose a real sample CSV copied from SmellNet.
@@ -234,3 +236,9 @@ The saved default app model is selected automatically by trial top-1; with the c
 - Sequence models with attention and uncertainty calibration.
 - Multi-task training with mixture and GC-MS priors.
 - Better deployment packaging and model monitoring.
+
+## Documentation
+- 📘 **Quick Start Guide**: `docs/QUICK_START_GUIDE.md` - Beginner-friendly walkthrough for non-technical users
+- 📊 **Research Workflow**: `docs/research_workflow.md` - Technical deep-dive into the ML pipeline
+- 📋 **Data Dictionary**: `docs/data_dictionary.md` - Dataset structure and schema details
+- 🤖 **Model Card**: `docs/model_card.md` - Model performance, limitations, and intended use
