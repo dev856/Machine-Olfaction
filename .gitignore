@@ -1,0 +1,28 @@
+# Python caches and test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local environments and editor state
+/.venv/
+/venv/
+.env
+.env.*
+.vscode/
+
+# Downloaded datasets and generated sample exports
+/data/raw/
+/data/samples/
+
+# Trained model artifacts
+/models/
+*.joblib
+*.pkl
+*.pt
+*.pth
+
+# Reports and generated outputs
+/reports/
+*.log

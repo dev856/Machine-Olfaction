@@ -1,0 +1,20 @@
+[project]
+name = "machine-olfaction"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "huggingface-hub>=1.12.0",
+    "joblib>=1.5.2",
+    "matplotlib>=3.10.9",
+    "numpy>=2.4.4",
+    "pandas>=3.0.2",
+    "pytest>=9.0.2",
+    "scikit-learn>=1.8.0",
+    "streamlit>=1.56.0",
+    "torch>=2.11.0",
+    "plotly"
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
