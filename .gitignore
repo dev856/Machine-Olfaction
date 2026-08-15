@@ -15,6 +15,8 @@ __pycache__/
 # Downloaded datasets and generated sample exports
 /data/raw/
 /data/samples/
+/data/interim/
+/data/processed/
 
 # Trained model artifacts
 /models/

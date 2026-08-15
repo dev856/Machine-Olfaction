@@ -15,7 +15,11 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from src.data.augmentation import add_baseline_drift, add_gaussian_jitter, apply_magnitude_scaling, apply_sensor_dropout
 from src.data.preprocess import identify_time_column, infer_sensor_columns
+from src.data.semantic_profiles import get_knowledge_base, get_semantic_profile
+from src.evaluation.sensor_importance import compute_sensor_importance_scores
+from src.models.mixture_predict import deconvolve_mixture_dataframe
 from src.models.pipeline_io import load_pipeline
 from src.models.predict import predict_dataframe, validate_uploaded_schema
 
@@ -135,6 +139,54 @@ def inject_style() -> None:
             border-radius: 8px;
             overflow: hidden;
             margin-top: 0.75rem;
+        }
+        .chem-chip {
+            display: inline-block;
+            border: 1px solid var(--mo-border);
+            border-radius: 999px;
+            padding: 0.22rem 0.65rem;
+            font-size: 0.85rem;
+            background: var(--mo-surface-soft);
+            color: var(--mo-text);
+            margin: 0.15rem 0.25rem 0.15rem 0;
+            font-weight: 500;
+        }
+        .sensory-chip {
+            display: inline-block;
+            border: 1px solid rgba(235, 152, 78, 0.4);
+            border-radius: 999px;
+            padding: 0.22rem 0.65rem;
+            font-size: 0.85rem;
+            background: var(--mo-accent-warm);
+            color: var(--mo-text);
+            margin: 0.15rem 0.25rem 0.15rem 0;
+        }
+        .category-badge {
+            display: inline-block;
+            border-radius: 6px;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            background: var(--mo-accent);
+            color: #ffffff;
+            margin-bottom: 0.4rem;
+        }
+        .semantic-card {
+            border: 1px solid var(--mo-border);
+            border-radius: 8px;
+            padding: 1rem 1.15rem;
+            background: var(--mo-surface);
+            box-shadow: 0 2px 6px var(--mo-shadow);
+            margin-top: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+        .kb-card {
+            border: 1px solid var(--mo-border);
+            border-radius: 8px;
+            padding: 0.85rem;
+            background: var(--mo-surface);
+            box-shadow: 0 1px 3px var(--mo-shadow);
+            margin-bottom: 0.75rem;
         }
         @media (max-width: 900px) {
             .hero-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -455,6 +507,267 @@ def linear_explanation_rows(bundle: dict[str, Any], result: dict[str, Any], limi
             }
         )
     return pd.DataFrame(rows)
+
+
+def render_semantic_profile_card(smell_class: str) -> None:
+    """Render a clean card with botanical category, chemical volatiles, and sensory notes."""
+    profile = get_semantic_profile(smell_class)
+    volatiles_html = "".join([f'<span class="chem-chip">🧪 {v}</span>' for v in profile.volatiles])
+    sensory_html = "".join([f'<span class="sensory-chip">👃 {s}</span>' for s in profile.sensory_notes])
+
+    st.markdown(
+        f"""
+        <div class="semantic-card">
+          <div class="category-badge">{profile.category}</div>
+          <div style="font-size: 1.15rem; font-weight: 600; color: var(--mo-text); margin-bottom: 0.35rem;">
+            Aroma & Chemical Profile: {smell_class.replace('_', ' ').title()}
+          </div>
+          <p style="color: var(--mo-muted); font-size: 0.94rem; margin-bottom: 0.6rem;">{profile.full_description}</p>
+          <div style="margin-bottom: 0.45rem;">
+            <strong style="font-size: 0.9rem; color: var(--mo-text); margin-right: 0.4rem;">Key Chemical Volatiles (VOCs):</strong>
+            {volatiles_html}
+          </div>
+          <div>
+            <strong style="font-size: 0.9rem; color: var(--mo-text); margin-right: 0.4rem;">Sensory Aroma Notes:</strong>
+            {sensory_html}
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_drift_simulator_tab(df: pd.DataFrame | None, time_col: str | None, sensor_cols: list[str], bundle: dict[str, Any]) -> None:
+    """Interactive playground to inject thermal drift, noise, and sensor failures to test model resilience."""
+    st.subheader("Hardware Drift & Stress Testing Playground")
+    st.write(
+        "Real-world electronic noses face sensor aging, temperature drift, and channel disconnection. "
+        "Inject artificial distortions below to test how robust the trained model remains under physical stress."
+    )
+    if df is None:
+        st.info("Upload or select a sensor CSV from the sidebar to activate the simulator.")
+        return
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        drift_slope = st.slider("Thermal Baseline Drift", min_value=-0.5, max_value=0.5, value=0.15, step=0.05)
+        drift_type = st.selectbox("Drift Type", ["linear", "exponential", "sinusoidal"])
+    with c2:
+        noise_sigma = st.slider("Gaussian Electrical Noise", min_value=0.0, max_value=0.3, value=0.05, step=0.01)
+        scale_factor = st.slider("Concentration / Scale Factor", min_value=0.5, max_value=2.0, value=1.0, step=0.1)
+    with c3:
+        drop_sensor = st.selectbox("Simulate Dead Sensor (Dropout)", ["None"] + sensor_cols)
+
+    raw_values = df[sensor_cols].to_numpy(dtype=float).copy()
+    stressed_values = raw_values.copy()
+
+    if drift_slope != 0.0:
+        stressed_values = add_baseline_drift(stressed_values, max_slope=drift_slope, drift_type=drift_type)
+    if noise_sigma > 0.0:
+        stressed_values = add_gaussian_jitter(stressed_values, sigma=noise_sigma)
+    if scale_factor != 1.0:
+        stressed_values = apply_magnitude_scaling(stressed_values, scale_range=(scale_factor, scale_factor), per_sensor=False)
+    if drop_sensor != "None":
+        drop_idx = sensor_cols.index(drop_sensor)
+        stressed_values[:, drop_idx] = 0.0
+
+    stressed_df = df.copy()
+    stressed_df[sensor_cols] = stressed_values
+
+    left_plot, right_plot = st.columns(2)
+    with left_plot:
+        plot_sensor_curves_interactive(df, time_col, sensor_cols, title="Clean Reference Signal")
+    with right_plot:
+        plot_sensor_curves_interactive(stressed_df, time_col, sensor_cols, title="Stressed / Distorted Signal")
+
+    try:
+        clean_res = predict_dataframe(df, bundle)
+        stress_res = predict_dataframe(stressed_df, bundle)
+
+        st.subheader("Model Resilience Comparison")
+        r1, r2, r3, r4 = st.columns(4)
+        r1.metric("Clean Prediction", clean_res["predicted_class"], f"{clean_res['confidence']*100:.1f}% conf")
+        r2.metric("Stressed Prediction", stress_res["predicted_class"], f"{stress_res['confidence']*100:.1f}% conf")
+
+        match = clean_res["predicted_class"] == stress_res["predicted_class"]
+        r3.metric("Prediction Maintained", "✅ Retained" if match else "⚠️ Shifted")
+        conf_delta = (stress_res["confidence"] - clean_res["confidence"]) * 100
+        r4.metric("Confidence Delta", f"{conf_delta:+.1f}%")
+
+        if match:
+            st.success("The model successfully retained the correct smell prediction despite hardware distortion!")
+        else:
+            st.warning(f"Hardware distortion caused the prediction to shift from `{clean_res['predicted_class']}` to `{stress_res['predicted_class']}`.")
+    except Exception as exc:
+        st.error(f"Inference under stress failed: {exc}")
+
+
+def render_mixture_deconvolution_tab() -> None:
+    """Interactive tool to deconvolve compound smell mixtures into constituent percentages."""
+    st.subheader("Odor Mixture Deconvolution & Ratio Estimation")
+    st.write(
+        "Real-world odors are frequently combinations of multiple aroma compounds. "
+        "This tool uses a multi-output regressor trained on SmellNet mixture data to predict constituent odorants and concentration ratios."
+    )
+
+    mix_candidates = list(ROOT.glob("models/mixture*/model.joblib")) + list(ROOT.glob("models/test_mixture/model.joblib"))
+    if not mix_candidates:
+        st.info("Mixture model artifact not found. Train it with: `uv run python src/models/train_mixture.py`")
+        return
+
+    mix_path = mix_candidates[0]
+    mix_bundle = cached_load_pipeline(str(mix_path))
+
+    sample_mix_dir = ROOT / "data" / "raw" / "SmellNet" / "mixture_data" / "training_new"
+    mix_samples = list(sample_mix_dir.glob("*.csv")) if sample_mix_dir.exists() else []
+
+    c1, c2 = st.columns([1.5, 1.0])
+    with c1:
+        mix_options = ["None"] + [str(p.name) for p in mix_samples[:50]]
+        selected_mix = st.selectbox("Choose a sample mixture recording", mix_options)
+    with c2:
+        mix_uploaded = st.file_uploader("Or upload a custom mixture CSV", type=["csv"], key="mix_uploader")
+
+    target_df = None
+    source_label = ""
+    if mix_uploaded is not None:
+        target_df = pd.read_csv(mix_uploaded)
+        source_label = mix_uploaded.name
+    elif selected_mix != "None" and sample_mix_dir.exists():
+        chosen_p = sample_mix_dir / selected_mix
+        if chosen_p.exists():
+            target_df = pd.read_csv(chosen_p)
+            source_label = selected_mix
+
+    if target_df is not None:
+        try:
+            res = deconvolve_mixture_dataframe(target_df, mix_bundle, threshold=0.05)
+
+            st.markdown(
+                f"""
+                <div class="result-panel">
+                  <div class="label">Primary Constituent Odor</div>
+                  <div class="value">{res["primary_odor"].replace('_', ' ').title()} ({res["primary_percentage"]:.1f}%)</div>
+                  <div class="note">Deconvolved from: {source_label}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            col_pie, col_breakdown = st.columns([1.2, 1.0])
+            with col_pie:
+                active = res["active_components"]
+                labels = [c["odor"].replace("_", " ").title() for c in active]
+                values = [c["percentage"] for c in active]
+
+                fig = go.Figure(data=[go.Pie(labels=labels, values=values, hole=0.45, textinfo="label+percent")])
+                fig.update_layout(
+                    title="Estimated Odor Mixture Proportions",
+                    margin=dict(l=20, r=20, t=40, b=20),
+                    height=340,
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+            with col_breakdown:
+                st.subheader("Constituent Breakdown")
+                breakdown_df = pd.DataFrame(active)[["odor", "percentage"]].rename(
+                    columns={"odor": "Odor Component", "percentage": "Estimated Share (%)"}
+                )
+                st.dataframe(breakdown_df, use_container_width=True, hide_index=True)
+
+            st.subheader("Active Component Aroma & Volatile Profiles")
+            for comp in active:
+                render_semantic_profile_card(comp["odor"])
+
+        except Exception as exc:
+            st.error(f"Mixture deconvolution error: {exc}")
+
+
+def render_hardware_importance_tab(bundle: dict[str, Any], model_path: Path) -> None:
+    """Evaluate physical sensor channel predictive power and hardware array pruning."""
+    st.subheader("Hardware Sensor Importance & Array Pruning")
+    st.write(
+        "Electronic nose hardware cost scales with sensor count. "
+        "This tool ranks gas sensor channels by their predictive power, helping determine the minimum viable sensor array."
+    )
+
+    importance = compute_sensor_importance_scores(bundle)
+    if not importance:
+        st.info("Importance scores are not available for this model artifact.")
+        return
+
+    df_imp = pd.DataFrame(list(importance.items()), columns=["Sensor Channel", "Importance (%)"])
+
+    c_chart, c_recom = st.columns([1.2, 1.0])
+    with c_chart:
+        fig = px.bar(
+            df_imp,
+            x="Importance (%)",
+            y="Sensor Channel",
+            orientation="h",
+            color="Importance (%)",
+            color_continuous_scale="Viridis",
+            title="Sensor Array Predictive Contribution",
+        )
+        fig.update_layout(yaxis=dict(autorange="reversed"), height=340, margin=dict(l=20, r=20, t=40, b=20))
+        st.plotly_chart(fig, use_container_width=True)
+
+    with c_recom:
+        st.subheader("Array Design Recommendations")
+        top_sensor = df_imp.iloc[0]["Sensor Channel"]
+        top_share = df_imp.iloc[0]["Importance (%)"]
+        top_3 = df_imp.head(3)["Sensor Channel"].tolist()
+        top_3_share = df_imp.head(3)["Importance (%)"].sum()
+
+        st.markdown(
+            f"""
+            - **Primary Gas Sensor**: `{top_sensor}` accounts for **{top_share:.1f}%** of classification power.
+            - **Top-3 Sensor Core**: `{' + '.join(top_3)}` collectively provide **{top_3_share:.1f}%** of total predictive signal.
+            - **Hardware Optimization**: For low-cost embedded e-noses, a reduced {len(top_3)}-sensor array (`{', '.join(top_3)}`) can retain high accuracy while reducing device bill-of-materials (BOM) cost and power consumption.
+            """
+        )
+
+
+def render_odor_knowledge_base_tab() -> None:
+    """Searchable catalog of all 50 SmellNet smell classes, chemical formulas, and sensory notes."""
+    st.subheader("SmellNet Odor & Chemical Knowledge Base")
+    st.write(
+        "Explore all 50 target smell classes, their botanical classifications, primary chemical volatile compounds (VOCs), and sensory aroma notes."
+    )
+    kb = get_knowledge_base()
+    all_cats = ["All Categories"] + kb.list_categories()
+
+    c_cat, c_search = st.columns([1.0, 1.2])
+    with c_cat:
+        selected_cat = st.selectbox("Filter by Odor Family", all_cats)
+    with c_search:
+        search_query = st.text_input("Search smell name, volatile chemical, or flavor note", placeholder="e.g. eugenol, limonene, citrus, spicy...")
+
+    all_classes = kb.list_all_classes()
+    filtered_profiles = []
+    for name in all_classes:
+        prof = kb.get_profile(name)
+        if selected_cat != "All Categories" and prof.category != selected_cat:
+            continue
+        if search_query:
+            q = search_query.lower()
+            text_match = (
+                q in prof.name.lower()
+                or q in prof.category.lower()
+                or any(q in v.lower() for v in prof.volatiles)
+                or any(q in s.lower() for s in prof.sensory_notes)
+                or q in prof.full_description.lower()
+            )
+            if not text_match:
+                continue
+        filtered_profiles.append(prof)
+
+    st.caption(f"Showing {len(filtered_profiles)} of {len(all_classes)} smell classes.")
+
+    cols = st.columns(2)
+    for idx, prof in enumerate(filtered_profiles):
+        with cols[idx % 2]:
+            render_semantic_profile_card(prof.name)
 
 
 def render_prediction_explanation(bundle: dict[str, Any], result: dict[str, Any]) -> None:
@@ -1051,8 +1364,20 @@ def main() -> None:
     metrics = load_metrics(model_path)
     trained_sensor_cols = list(bundle["sensor_columns"])
 
-    overview_tab, predict_tab, signal_tab, research_tab, details_tab, models_tab, method_tab = st.tabs(
-        ["Overview", "Prediction Results", "Signal Analysis", "Research Evidence", "CSV Details", "Models", "Method"]
+    overview_tab, predict_tab, signal_tab, mixture_tab, drift_tab, hardware_tab, kb_tab, research_tab, details_tab, models_tab, method_tab = st.tabs(
+        [
+            "Overview",
+            "Prediction Results",
+            "Signal Analysis",
+            "Mixture Deconvolution",
+            "Stress Test & Drift",
+            "Hardware Importance",
+            "Odor Knowledge Base",
+            "Research Evidence",
+            "CSV Details",
+            "Models",
+            "Method",
+        ]
     )
 
     with overview_tab:
@@ -1112,7 +1437,7 @@ def main() -> None:
                 f"""
                 <div class="result-panel">
                   <div class="label">Predicted smell class</div>
-                  <div class="value">{result["predicted_class"]}</div>
+                  <div class="value">{result["predicted_class"].replace('_', ' ').title()}</div>
                   <div class="note">{confidence_name} confidence: {result["confidence"] * 100:.1f}% across {result["n_windows"]} analyzed window(s), using {result["aggregation"]} aggregation.</div>
                 </div>
                 """,
@@ -1126,10 +1451,13 @@ def main() -> None:
             
             with col_metrics:
                 r1, r2, r3 = st.columns(3)
-                r1.metric("Predicted Smell", result["predicted_class"])
+                r1.metric("Predicted Smell", result["predicted_class"].replace('_', ' ').title())
                 r2.metric("Confidence", f"{result['confidence'] * 100:.1f}%")
                 r3.metric("Analyzed Windows", result["n_windows"])
                 st.info(confidence_text)
+
+            # Render rich aroma and chemical volatile profile card
+            render_semantic_profile_card(result["predicted_class"])
 
             left, right = st.columns([1.0, 1.0])
             with left:
@@ -1155,6 +1483,18 @@ def main() -> None:
 
     with signal_tab:
         render_signal_analysis(df, time_col, trained_sensor_cols)
+
+    with mixture_tab:
+        render_mixture_deconvolution_tab()
+
+    with drift_tab:
+        render_drift_simulator_tab(df, time_col, trained_sensor_cols, bundle)
+
+    with hardware_tab:
+        render_hardware_importance_tab(bundle, model_path)
+
+    with kb_tab:
+        render_odor_knowledge_base_tab()
 
     with research_tab:
         render_research_summary(metrics)

@@ -103,10 +103,60 @@ def aggregate_window_probabilities(window_proba: np.ndarray, method: str = "mean
 
 
 def predict_dataframe(uploaded_df: pd.DataFrame, bundle: dict[str, Any], aggregation: str | None = None) -> dict[str, Any]:
-    """Predict the smell class for one uploaded sensor CSV."""
-
+    """Predict the smell class for one uploaded sensor CSV.
+    
+    Supports both classical scikit-learn feature pipelines and deep PyTorch time-series models.
+    """
     model = bundle["model"]
     classes = bundle["label_encoder"].classes_
+    is_pytorch = False
+
+    try:
+        import torch
+        if isinstance(model, torch.nn.Module) or bundle.get("framework") == "pytorch":
+            is_pytorch = True
+    except Exception:
+        is_pytorch = False
+
+    if is_pytorch:
+        import torch
+        trained_sensor_cols: list[str] = list(bundle["sensor_columns"])
+        time_col, detected_sensor_cols, missing = validate_uploaded_schema(uploaded_df, trained_sensor_cols)
+        if missing:
+            raise ValueError(f"Uploaded CSV is missing expected sensor columns: {missing}")
+
+        preprocess_cfg = PreprocessConfig(**bundle["preprocess_config"])
+        proc_df, _, _ = preprocess_trial(
+            uploaded_df,
+            sensor_columns=trained_sensor_cols,
+            time_column=time_col,
+            config=preprocess_cfg,
+        )
+        values = proc_df[trained_sensor_cols].to_numpy(dtype=np.float32)
+        # Reshape to (1, n_sensors, seq_len)
+        tensor_in = torch.from_numpy(values.T).unsqueeze(0)
+
+        model.eval()
+        with torch.no_grad():
+            logits = model(tensor_in)
+            proba = torch.softmax(logits, dim=-1).cpu().numpy()[0]
+
+        sorted_idx = np.argsort(proba)[::-1]
+        return {
+            "class_names": classes,
+            "probabilities": proba,
+            "window_probabilities": np.expand_dims(proba, axis=0),
+            "feature_matrix": values,
+            "top_indices": sorted_idx,
+            "predicted_class": str(classes[sorted_idx[0]]),
+            "confidence": float(proba[sorted_idx[0]]),
+            "processed_df": proc_df,
+            "time_column": time_col,
+            "detected_sensor_columns": detected_sensor_cols,
+            "n_windows": 1,
+            "aggregation": "sequence",
+        }
+
     features, proc_df, time_col, detected_sensor_cols = build_feature_matrix(uploaded_df, bundle)
 
     window_proba = model.predict_proba(features)
@@ -134,3 +184,4 @@ def predict_csv(csv_path: Path, model_path: Path) -> dict[str, Any]:
     bundle = load_pipeline(model_path)
     df = pd.read_csv(csv_path)
     return predict_dataframe(df, bundle)
+

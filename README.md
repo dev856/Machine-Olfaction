@@ -148,34 +148,37 @@ uv run python src/models/train_baseline.py --data-root data/raw/SmellNet --outpu
 uv run python src/models/evaluate.py --model-path models/baseline_windowed/model.joblib --eval-data models/baseline_windowed/eval_data.npz --output-dir models/baseline_windowed
 ```
 
-### 5) Optional: train improved time-series model
+### 5) Train InceptionTime Deep Neural Network
 ```powershell
-uv run python src/models/train_timeseries.py --data-root data/raw/SmellNet --output-dir models/timeseries
+uv run python src/models/train_inception.py --data-root data/raw/SmellNet --output-dir models/inception_time --epochs 25
 ```
 
-### 6) Create lightweight demo sample CSVs
+### 6) Train Smell Mixture Deconvolution Regressor
 ```powershell
-uv run python src/data/make_samples.py --data-root data/raw/SmellNet --output-dir data/samples
+uv run python src/models/train_mixture.py --data-root data/raw/SmellNet/mixture_data --output-dir models/mixture_regressor
 ```
 
-### 7) Run Streamlit demo
+### 7) Run FastAPI Real-Time Microservice (for IoT / Edge Devices)
+```powershell
+uv run uvicorn src.api.main:app --reload --port 8000
+```
+*Interactive Swagger API documentation available at `http://localhost:8000/docs`.*
+
+### 8) Run Streamlit Research App
 ```powershell
 uv run streamlit run src/app/streamlit_app.py
 ```
 
-## Streamlit Demo Behavior
-Use the sidebar **Navigation** menu to switch between:
-
-- **Project Guide**: explains what the project does, how it works, current status, and key limitations.
-- **Prediction Demo**: loads saved models, accepts demo/uploaded CSVs, and shows model predictions.
-
-1. Upload a sensor CSV or choose a real sample CSV copied from SmellNet.
-2. Validate the uploaded schema against the saved model's expected sensor columns.
-3. Preview raw sensor curves.
-4. Run the saved baseline model with the same preprocessing and window aggregation used during evaluation.
-5. Show predicted smell class, confidence label, analyzed window count, top-5 probabilities, and preprocessed curves.
-6. Explain which sensor-response clues supported a logistic-regression prediction.
-7. Review research evidence: ablation results, weakest classes, and common held-out test mix-ups.
+## Streamlit App Capabilities
+The interactive web app includes:
+- **Prediction Results**: Full multiclass smell recognition, confidence gauge, top-5 probability distribution, preprocessed model inputs, and linear feature contribution explanations.
+- **Aroma & Chemical Volatiles Profile**: Botanical categorization, key volatile organic compounds (VOCs - *e.g., Eugenol, Limonene, Cinnamaldehyde, Allicin*), and sensory notes integrated from `SmellNet text_data`.
+- **Signal Analysis**: Interactive Plotly multi-channel response curves and per-sensor statistical summaries.
+- **Mixture Deconvolution**: Decomposition of compound smell signals into constituent ingredients and percentage shares (e.g. 80% Orange + 20% Almond).
+- **Hardware Drift & Stress Simulator**: Real-time playground to inject thermal drift, electrical Gaussian noise, and sensor channel dropout to test model resilience live.
+- **Sensor Hardware Importance**: Ranking of gas sensor channels by predictive contribution for physical array pruning and BOM hardware cost reduction.
+- **Odor Knowledge Base**: Searchable catalog of all 50 target smell classes, chemical formulas, and sensory flavor descriptors.
+- **Research Evidence**: Error analysis, confusion matrix, weak classes, and held-out test evaluation.
 
 ## Model Selection in the App
 The Streamlit sidebar automatically discovers saved pipelines at `models/*/model.joblib`. Each option shows the artifact folder, the best classifier inside that artifact, and the trial-level top-1 metric when available.
