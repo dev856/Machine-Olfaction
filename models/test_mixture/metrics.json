@@ -1,0 +1,45 @@
+{
+  "best_model_name": "RandomForestRegressor",
+  "target_odorants": [
+    "peach",
+    "apple",
+    "banana",
+    "orange",
+    "pear",
+    "strawberry",
+    "mango",
+    "almond",
+    "clove",
+    "coriander",
+    "cumin",
+    "garlic"
+  ],
+  "n_samples_train": 10,
+  "n_samples_test": 10,
+  "candidate_results": {
+    "RandomForestRegressor": {
+      "mae": 0.025000000000000005,
+      "rmse": 0.08660254037844388,
+      "r2": 0.6666666666666666,
+      "cosine_similarity": 0.9287464628562718
+    },
+    "ExtraTreesRegressor": {
+      "mae": 0.025000000000000005,
+      "rmse": 0.08660254037844387,
+      "r2": 0.6666666666666666,
+      "cosine_similarity": 0.9287464628562718
+    },
+    "RidgeRegressor": {
+      "mae": 0.025000000000000005,
+      "rmse": 0.08660254037844387,
+      "r2": 0.6666666666666666,
+      "cosine_similarity": 0.9287464628562718
+    }
+  },
+  "best_metrics": {
+    "mae": 0.025000000000000005,
+    "rmse": 0.08660254037844388,
+    "r2": 0.6666666666666666,
+    "cosine_similarity": 0.9287464628562718
+  }
+}

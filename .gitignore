@@ -12,19 +12,29 @@ __pycache__/
 .env.*
 .vscode/
 
-# Downloaded datasets and generated sample exports
-/data/raw/
-/data/samples/
+# Downloaded raw datasets (keep semantic description JSON and demo samples)
+/data/raw/*
+!/data/raw/SmellNet/
+/data/raw/SmellNet/*
+!/data/raw/SmellNet/text_data/
+/data/raw/SmellNet/text_data/*
+!/data/raw/SmellNet/text_data/text_description.json
 /data/interim/
 /data/processed/
 
-# Trained model artifacts
-/models/
-*.joblib
-*.pkl
-*.pt
-*.pth
+# Keep demo sample CSVs for Streamlit Cloud
+!/data/samples/
+!/data/samples/**
 
-# Reports and generated outputs
+# Model artifacts (ignore large local training checkpoints, keep cloud demo models)
+/models/*
+!/models/baseline_windowed_trialmax/
+!/models/baseline_windowed_trialmax/**
+!/models/inception_time/
+!/models/inception_time/**
+!/models/test_mixture/
+!/models/test_mixture/**
+
+# Reports and logs
 /reports/
 *.log

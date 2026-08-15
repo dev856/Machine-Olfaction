@@ -1,0 +1,14 @@
+{
+  "best_model_name": "PyTorch_Inception",
+  "trial_top1": 0.2,
+  "trial_top5": 0.48,
+  "macro_f1": 0.10738095238095237,
+  "weighted_f1": 0.10738095238095237,
+  "test_accuracy": 0.2,
+  "test_top5": 0.48,
+  "n_classes": 50,
+  "n_sensors": 6,
+  "target_points": 300,
+  "epochs": 25,
+  "model_type": "inception"
+}
