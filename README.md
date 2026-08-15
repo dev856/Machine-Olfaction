@@ -242,7 +242,4 @@ The saved default app model is selected automatically by trial top-1; with the c
 - Multi-task training with mixture and GC-MS priors.
 - Better deployment packaging and model monitoring.
 
-## Public Repo Notes
-- The README contains the project overview, setup, usage, results, and limitations.
-- Raw SmellNet data, generated sample CSVs, trained model artifacts, reports, caches, and local environments are excluded from version control.
-- To run predictions, create or provide compatible data and train or copy model artifacts locally.
+
