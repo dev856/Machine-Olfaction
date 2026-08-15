@@ -200,16 +200,25 @@ def inject_style() -> None:
     )
 
 
-def sample_csvs(sample_root: Path) -> list[Path]:
-    if not sample_root.exists():
-        return []
-    return [path for path in sorted(sample_root.rglob("*.csv")) if ".cache" not in path.parts]
+def sample_csvs(sample_root: Path | None = None) -> list[Path]:
+    root = Path(sample_root) if sample_root else (ROOT / "data" / "samples")
+    if root.exists():
+        found = [path for path in sorted(root.rglob("*.csv")) if ".cache" not in path.parts]
+        if found:
+            return found
+
+    # Fallback to local raw base_data testing folder if data/samples is empty
+    raw_testing = ROOT / "data" / "raw" / "SmellNet" / "base_data" / "testing"
+    if raw_testing.exists():
+        return [path for path in sorted(raw_testing.rglob("*.csv")) if ".cache" not in path.parts][:50]
+    return []
 
 
-def discover_model_artifacts(models_root: Path = Path("models")) -> list[Path]:
-    if not models_root.exists():
+def discover_model_artifacts(models_root: Path | None = None) -> list[Path]:
+    root = Path(models_root) if models_root else (ROOT / "models")
+    if not root.exists():
         return []
-    return sorted(models_root.glob("*/model.joblib"))
+    return sorted(root.glob("*/model.joblib"))
 
 
 def project_relative_path(path: Path | str) -> str:
